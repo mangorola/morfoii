@@ -588,20 +588,8 @@ canvas.addEventListener('touchmove', (e) => {
 
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// ---- Initial yellow circle ----------------------------------------
-function seedInitialCircle() {
-  const c = palette[1]; // yellow
-  splatProgram.bind();
-  gl.uniform1f(splatProgram.uniforms.uFilterMode, 1.0);
-  gl.uniform1i(splatProgram.uniforms.uTarget, dye.read.attach(0));
-  gl.uniform1f(splatProgram.uniforms.aspectRatio, canvas.width / canvas.height);
-  gl.uniform2f(splatProgram.uniforms.point, 0.5, 0.5);
-  gl.uniform3f(splatProgram.uniforms.color, c.r, c.g, c.b);
-  gl.uniform1f(splatProgram.uniforms.radius, correctRadius(0.28));
-  blit(dye.write);
-  dye.swap();
-}
-seedInitialCircle();
+// No initial color — canvas starts fully black.
+// Color appears only through user interaction.
 
 // ---- Slow ambient currents ----------------------------------------
 // Keep the fluid alive when the mouse is idle: inject faint, smoothly
@@ -761,7 +749,6 @@ function frame() {
 
   if (resizeCanvas()) {
     initFramebuffers();
-    seedInitialCircle();
   }
 
   // No ambient stir: any global force would cause color to drift out of
