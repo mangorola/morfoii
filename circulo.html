@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Círculo de colores</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+    }
+    body {
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .circulo {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: red;
+      animation: cambioColor 6s infinite;
+    }
+    @keyframes cambioColor {
+      0%   { background: red; }
+      33%  { background: cyan; }
+      66%  { background: yellow; }
+      100% { background: red; }
+    }
+  </style>
+</head>
+<body>
+  <div class="circulo"></div>
+</body>
+</html>
