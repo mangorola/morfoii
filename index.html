@@ -588,6 +588,13 @@ canvas.addEventListener('touchmove', (e) => {
 
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
+// Luminosity: 0 = pure hue, 1 = white. Controlled by mouse wheel.
+let luminosity = 0;
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  luminosity = Math.max(0, Math.min(1, luminosity - e.deltaY * 0.001));
+}, { passive: false });
+
 // No initial color — canvas starts fully black.
 // Color appears only through user interaction.
 
@@ -729,12 +736,12 @@ function applyInputs() {
   if (pointer.moved) {
     pointer.moved = false;
     const c = palette[activeColorIndex];
-    // emitted color intensity kept moderate so mixing stays organic
-    // Color is nearly permanent and being blurred each frame, so each
-    // deposit is small — it accumulates gradually into soft gradients.
-    // Smaller brush covers less area, so per-deposit intensity is bumped
-    // slightly to keep small touches clearly visible without bleeding wide.
-    const color = { r: c.r * 0.45, g: c.g * 0.45, b: c.b * 0.45 };
+    // Lerp from pure hue toward white based on luminosity (wheel control).
+    const l = luminosity;
+    const lr = c.r + (1.0 - c.r) * l;
+    const lg = c.g + (1.0 - c.g) * l;
+    const lb = c.b + (1.0 - c.b) * l;
+    const color = { r: lr * 0.45, g: lg * 0.45, b: lb * 0.45 };
     splat(pointer.x, pointer.y, pointer.dx, pointer.dy, color);
   }
 }
