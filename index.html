@@ -5,622 +5,515 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BE LIGHT</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #f2f2f2;
+            background: #f0f0f0;
             overflow: hidden;
             width: 100vw;
             height: 100vh;
-            font-family: 'Space Mono', sans-serif;
-            cursor: default;
+            font-family: 'Inter', sans-serif;
         }
+        #homepage { width: 100%; height: 100%; position: relative; }
+        #chapter-container { display: none; width: 100%; height: 100%; }
+        canvas { display: block; }
 
-        #homepage {
-            position: relative;
-            width: 100%;
-            height: 100%;
-        }
-
-        #chapter-container {
-            display: none;
-            width: 100%;
-            height: 100%;
-        }
-
-        .scene {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 600px;
-            height: 400px;
-            perspective: 1400px;
-            transform-style: preserve-3d;
-        }
-
-        .scene-inner {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            transform-style: preserve-3d;
-            transition: transform 0.1s linear;
-        }
-
-        .color-bleed-layer {
+        .label-layer {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             pointer-events: none;
-            z-index: 0;
-        }
-
-        .color-bleed {
-            position: absolute;
-            border-radius: 40%;
-            filter: blur(70px);
-            transition: opacity 1.2s ease, transform 1.2s ease;
-        }
-
-        .panel {
-            position: absolute;
-            top: 50%;
-            border-radius: 3px;
-            cursor: pointer;
-            transform-style: preserve-3d;
-            transition: transform 0.7s cubic-bezier(0.23, 1, 0.32, 1);
-            will-change: transform;
-        }
-
-        .panel-face-front {
-            position: absolute;
-            inset: 0;
-            border-radius: 3px;
-            backface-visibility: hidden;
-            overflow: hidden;
-        }
-
-        .panel-face-front::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(
-                170deg,
-                rgba(255,255,255,0.45) 0%,
-                rgba(255,255,255,0.18) 25%,
-                rgba(255,255,255,0.04) 55%,
-                rgba(255,255,255,0.1) 85%,
-                rgba(255,255,255,0.2) 100%
-            );
-            z-index: 2;
-        }
-
-        .panel-face-front::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 50%;
-            background: linear-gradient(
-                180deg,
-                rgba(255,255,255,0.25) 0%,
-                transparent 100%
-            );
-            z-index: 3;
-            border-radius: 3px 3px 0 0;
-        }
-
-        .panel-inner-glow {
-            position: absolute;
-            inset: 10%;
-            border-radius: 50%;
-            filter: blur(25px);
-            z-index: 1;
-            transition: opacity 0.8s ease;
-        }
-
-        .panel-edge-right {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 6px;
-            height: 100%;
-            transform: translateX(50%) rotateY(90deg);
-            transform-origin: center center;
-            backface-visibility: hidden;
-            border-radius: 0 2px 2px 0;
-        }
-
-        .panel-edge-bottom {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            transform: translateY(50%) rotateX(-90deg);
-            transform-origin: center center;
-            backface-visibility: hidden;
-            border-radius: 0 0 2px 2px;
-        }
-
-        .panel-top-light {
-            position: absolute;
-            top: -1px;
-            left: 5%;
-            right: 5%;
-            height: 2px;
             z-index: 5;
         }
 
-        .panel-right-light {
+        .panel-label {
             position: absolute;
-            top: 5%;
-            right: -1px;
-            bottom: 5%;
-            width: 2px;
-            z-index: 5;
-        }
-
-        .panel-left-light {
-            position: absolute;
-            top: 5%;
-            left: -1px;
-            bottom: 5%;
-            width: 2px;
-            z-index: 5;
-        }
-
-        .panel-halo {
-            position: absolute;
-            inset: -25px;
-            border-radius: 16px;
-            filter: blur(30px);
-            pointer-events: none;
-            z-index: -1;
-            transition: opacity 0.8s ease, inset 0.8s ease, filter 0.8s ease;
-        }
-
-        .panel-light-cast {
-            position: absolute;
-            bottom: -25%;
-            left: -15%;
-            right: -15%;
-            height: 60%;
-            filter: blur(40px);
-            border-radius: 50%;
-            pointer-events: none;
-            z-index: -2;
-            transition: opacity 0.8s ease;
-        }
-
-        .panel-number {
-            position: absolute;
-            top: -32px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 9px;
+            font-size: 12px;
             font-weight: 200;
             letter-spacing: 0.2em;
             color: rgba(0,0,0,0);
-            transition: color 0.7s ease, text-shadow 0.7s ease;
+            transition: color 0.6s ease, text-shadow 0.6s ease;
             user-select: none;
-            white-space: nowrap;
-            z-index: 10;
+            transform: translate(-50%, -50%);
+        }
+        .panel-label.visible {
+            color: rgba(80,80,80,0.7);
+        }
+        .panel-label.active {
+            color: rgba(60,60,60,0.85);
         }
 
         .title-area {
             position: fixed;
-            bottom: clamp(24px, 4vh, 50px);
+            bottom: clamp(20px, 3.5vh, 45px);
             left: 50%;
             transform: translateX(-50%);
             text-align: center;
             z-index: 10;
             pointer-events: none;
         }
-
         .title-main {
-            font-size: clamp(11px, 1vw, 15px);
+            font-size: clamp(10px, 0.9vw, 14px);
             font-weight: 200;
             letter-spacing: 0.4em;
-            color: rgba(0,0,0,0.18);
+            color: rgba(0,0,0,0.15);
         }
 
-        @media (max-width: 768px) {
-            .scene {
-                width: 90vw;
-                height: 350px;
-                transform: translate(-50%, -50%) scale(0.75);
-            }
-            .panel-number {
-                font-size: 9px;
-                top: -22px;
-            }
+        .nav-hint {
+            position: fixed;
+            bottom: clamp(50px, 7vh, 80px);
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            font-weight: 300;
+            letter-spacing: 0.15em;
+            color: rgba(0,0,0,0.12);
+            z-index: 10;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 2s ease;
         }
     </style>
 </head>
 <body>
 
 <div id="homepage">
-    <div class="color-bleed-layer" id="bleedLayer"></div>
-    <div class="scene">
-        <div class="scene-inner" id="sceneInner"></div>
-    </div>
-    <div class="title-area">
-        <div class="title-main">BE LIGHT</div>
-    </div>
+    <div class="label-layer" id="labelLayer"></div>
+    <div class="title-area"><div class="title-main">BE LIGHT</div></div>
+    <div class="nav-hint" id="navHint">SCROLL TO EXPLORE</div>
 </div>
 
 <div id="chapter-container"></div>
 
-<script>
-(function() {
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+    }
+}
+</script>
 
-    const panels = [
-        { h: 0,   s: 85, l: 52, h2: 8,   s2: 88, l2: 50 },
-        { h: 12,  s: 88, l: 54, h2: 22,  s2: 90, l2: 52 },
-        { h: 25,  s: 90, l: 56, h2: 35,  s2: 88, l2: 54 },
-        { h: 38,  s: 88, l: 55, h2: 48,  s2: 85, l2: 52 },
-        { h: 52,  s: 90, l: 54, h2: 56,  s2: 88, l2: 52 },
-        { h: 68,  s: 78, l: 50, h2: 85,  s2: 72, l2: 48 },
-        { h: 140, s: 65, l: 48, h2: 165, s2: 70, l2: 46 },
-        { h: 178, s: 75, l: 48, h2: 190, s2: 78, l2: 46 },
-        { h: 198, s: 80, l: 50, h2: 210, s2: 82, l2: 48 },
-        { h: 215, s: 82, l: 52, h2: 225, s2: 85, l2: 50 },
-    ];
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-    const N = panels.length;
-    const sceneInner = document.getElementById('sceneInner');
-    const bleedLayer = document.getElementById('bleedLayer');
+const PANEL_COLORS = [
+    { name: 'Red',          h: 0,   s: 1.0,  l: 0.50, hex: '#ff0000' },
+    { name: 'Red-Orange',   h: 15,  s: 1.0,  l: 0.50, hex: '#ff4400' },
+    { name: 'Orange',       h: 28,  s: 1.0,  l: 0.50, hex: '#ff7700' },
+    { name: 'Amber',        h: 40,  s: 1.0,  l: 0.50, hex: '#ff9900' },
+    { name: 'Yellow',       h: 52,  s: 1.0,  l: 0.50, hex: '#ffd500' },
+    { name: 'Yellow-Green', h: 72,  s: 0.95, l: 0.45, hex: '#6ecc00' },
+    { name: 'Green-Cyan',   h: 155, s: 0.90, l: 0.42, hex: '#0ad468' },
+    { name: 'Cyan',         h: 182, s: 0.95, l: 0.44, hex: '#05c8d8' },
+    { name: 'Blue-Cyan',    h: 200, s: 0.95, l: 0.46, hex: '#0590e0' },
+    { name: 'Blue',         h: 218, s: 0.92, l: 0.50, hex: '#1060e8' },
+];
 
-    const panelWidth = '75px';
-    const panelHeight = '280px';
+const N = PANEL_COLORS.length;
+const PANEL_SIZE = 2.8;
+const PANEL_THICKNESS = 0.12;
+const SPACING = 3.2;
+const FAN_ANGLE = Math.PI * 0.18;
+const FAN_Z = 1.8;
 
-    panels.forEach((c, i) => {
-        const bleed = document.createElement('div');
-        bleed.className = 'color-bleed';
-        bleed.id = 'bleed-' + i;
-        const bx = 20 + (i / (N - 1)) * 60;
-        bleed.style.cssText = `
-            width: 20vw;
-            height: 45vh;
-            left: ${bx}%;
-            top: 28%;
-            transform: translate(-50%, 0);
-            opacity: 0.4;
-            background: radial-gradient(
-                ellipse at center,
-                hsla(${c.h}, ${c.s}%, ${c.l}%, 0.5) 0%,
-                hsla(${c.h2}, ${c.s2}%, ${c.l2}%, 0.2) 40%,
-                transparent 70%
-            );
-        `;
-        bleedLayer.appendChild(bleed);
+let currentIndex = 0;
+let targetIndex = 0;
+let scrollAccum = 0;
+let hoveredIndex = -1;
+let mouseNDC = { x: 0, y: 0 };
+let smoothMouse = { x: 0, y: 0 };
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf0f0f0);
+scene.fog = new THREE.Fog(0xf0f0f0, 18, 40);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 1.8, 10);
+camera.lookAt(0, 0.6, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
+document.getElementById('homepage').insertBefore(renderer.domElement, document.getElementById('labelLayer'));
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.75, 0.7, 0.3
+);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 10, 8);
+scene.add(dirLight);
+
+const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
+backLight.position.set(-3, 5, -5);
+scene.add(backLight);
+
+const floorGeo = new THREE.PlaneGeometry(60, 30);
+const floorMat = new THREE.MeshStandardMaterial({
+    color: 0xf2f2f2,
+    roughness: 0.4,
+    metalness: 0.0,
+});
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -PANEL_SIZE / 2 - 0.3;
+scene.add(floor);
+
+const panelGroups = [];
+const panelMeshes = [];
+const glowLights = [];
+const floorLights = [];
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+PANEL_COLORS.forEach((pc, i) => {
+    const color = new THREE.Color(pc.hex);
+
+    const group = new THREE.Group();
+    scene.add(group);
+    panelGroups.push(group);
+
+    const geo = new THREE.BoxGeometry(PANEL_SIZE, PANEL_SIZE, PANEL_THICKNESS, 1, 1, 1);
+    const mat = new THREE.MeshPhysicalMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.72,
+        roughness: 0.12,
+        metalness: 0.0,
+        transmission: 0.5,
+        thickness: 2.5,
+        ior: 1.45,
+        clearcoat: 0.3,
+        clearcoatRoughness: 0.2,
+        envMapIntensity: 0.5,
+        side: THREE.DoubleSide,
     });
 
-    const totalSpread = 85;
-    const stepX = totalSpread / (N - 1);
-    const depthStep = 35;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.index = i;
+    group.add(mesh);
+    panelMeshes.push(mesh);
 
-    panels.forEach((c, i) => {
-        const num = String(i + 1).padStart(2, '0');
-        const midH = (c.h + c.h2) / 2;
-        const midS = (c.s + c.s2) / 2;
-        const midL = (c.l + c.l2) / 2;
+    const edgeColor = color.clone().multiplyScalar(0.85);
+    const edgeMatRight = new THREE.MeshPhysicalMaterial({
+        color: edgeColor,
+        transparent: true,
+        opacity: 0.85,
+        roughness: 0.08,
+        metalness: 0.05,
+        clearcoat: 0.5,
+        side: THREE.DoubleSide,
+    });
 
-        const xPercent = (100 - totalSpread) / 2 + i * stepX;
-        const zDepth = (N - 1 - i) * depthStep;
+    const rightEdge = new THREE.Mesh(
+        new THREE.PlaneGeometry(PANEL_THICKNESS, PANEL_SIZE),
+        edgeMatRight
+    );
+    rightEdge.position.set(PANEL_SIZE / 2, 0, 0);
+    rightEdge.rotation.y = Math.PI / 2;
+    group.add(rightEdge);
 
-        const panel = document.createElement('div');
-        panel.className = 'panel';
-        panel.dataset.index = i;
-        panel.dataset.baseZ = zDepth;
-        panel.dataset.baseX = xPercent;
+    const leftEdge = new THREE.Mesh(
+        new THREE.PlaneGeometry(PANEL_THICKNESS, PANEL_SIZE),
+        edgeMatRight.clone()
+    );
+    leftEdge.position.set(-PANEL_SIZE / 2, 0, 0);
+    leftEdge.rotation.y = -Math.PI / 2;
+    group.add(leftEdge);
 
-        panel.style.cssText = `
-            left: ${xPercent}%;
-            width: ${panelWidth};
-            height: ${panelHeight};
-            transform: translateY(-50%) translateZ(${zDepth}px) translateX(-50%);
-            z-index: ${i + 1};
-        `;
+    const topEdge = new THREE.Mesh(
+        new THREE.PlaneGeometry(PANEL_SIZE, PANEL_THICKNESS),
+        edgeMatRight.clone()
+    );
+    topEdge.position.set(0, PANEL_SIZE / 2, 0);
+    topEdge.rotation.x = Math.PI / 2;
+    group.add(topEdge);
 
-        const faceFront = document.createElement('div');
-        faceFront.className = 'panel-face-front';
-        faceFront.style.background = `linear-gradient(
-            160deg,
-            hsla(${c.h}, ${c.s}%, ${c.l}%, 0.6) 0%,
-            hsla(${c.h}, ${c.s - 5}%, ${c.l + 12}%, 0.45) 20%,
-            hsla(${midH}, ${midS}%, ${midL + 8}%, 0.38) 45%,
-            hsla(${c.h2}, ${c.s2}%, ${c.l2 + 5}%, 0.48) 70%,
-            hsla(${c.h2}, ${c.s2}%, ${c.l2}%, 0.6) 100%
-        )`;
+    const bottomEdge = new THREE.Mesh(
+        new THREE.PlaneGeometry(PANEL_SIZE, PANEL_THICKNESS),
+        edgeMatRight.clone()
+    );
+    bottomEdge.position.set(0, -PANEL_SIZE / 2, 0);
+    bottomEdge.rotation.x = -Math.PI / 2;
+    group.add(bottomEdge);
 
-        const innerGlow = document.createElement('div');
-        innerGlow.className = 'panel-inner-glow';
-        innerGlow.style.background = `radial-gradient(
-            ellipse at 45% 40%,
-            hsla(${c.h}, ${c.s}%, ${c.l + 18}%, 0.6) 0%,
-            hsla(${c.h2}, ${c.s2}%, ${c.l2 + 12}%, 0.25) 55%,
-            transparent 85%
-        )`;
-        innerGlow.style.opacity = '0.4';
+    const glowLight = new THREE.PointLight(color, 2.5, 10, 1.4);
+    glowLight.position.set(0, 0, 0.5);
+    group.add(glowLight);
+    glowLights.push(glowLight);
 
-        const edgeRight = document.createElement('div');
-        edgeRight.className = 'panel-edge-right';
-        edgeRight.style.background = `linear-gradient(
-            180deg,
-            hsla(${c.h}, ${c.s}%, ${c.l - 3}%, 0.75) 0%,
-            hsla(${midH}, ${midS}%, ${midL}%, 0.65) 50%,
-            hsla(${c.h2}, ${c.s2}%, ${c.l2 - 5}%, 0.7) 100%
-        )`;
+    const floorLight = new THREE.PointLight(color, 2.0, 8, 1.6);
+    floorLight.position.set(0, -PANEL_SIZE / 2 - 0.2, 0.3);
+    group.add(floorLight);
+    floorLights.push(floorLight);
 
-        const edgeBottom = document.createElement('div');
-        edgeBottom.className = 'panel-edge-bottom';
-        edgeBottom.style.background = `linear-gradient(
-            90deg,
-            hsla(${c.h}, ${c.s}%, ${c.l - 6}%, 0.55) 0%,
-            hsla(${c.h2}, ${c.s2}%, ${c.l2 - 6}%, 0.55) 100%
-        )`;
+    const reflGeo = new THREE.PlaneGeometry(PANEL_SIZE * 1.4, PANEL_SIZE * 0.7);
+    const reflMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.14,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+    });
+    const reflMesh = new THREE.Mesh(reflGeo, reflMat);
+    reflMesh.rotation.x = -Math.PI / 2;
+    reflMesh.position.y = -PANEL_SIZE / 2 - 0.28;
+    reflMesh.position.z = 0.3;
+    group.add(reflMesh);
+    reflMesh.userData.isReflection = true;
+});
 
-        const topLight = document.createElement('div');
-        topLight.className = 'panel-top-light';
-        topLight.style.background = `linear-gradient(90deg,
-            hsla(${c.h}, ${c.s}%, ${c.l + 20}%, 0.6),
-            hsla(${c.h2}, ${c.s2}%, ${c.l2 + 20}%, 0.5)
-        )`;
-        topLight.style.boxShadow = `
-            0 -5px 15px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.35),
-            0 0 8px hsla(${c.h}, ${c.s}%, ${c.l + 15}%, 0.25)
-        `;
+const labelLayer = document.getElementById('labelLayer');
+const labels = [];
+PANEL_COLORS.forEach((pc, i) => {
+    const el = document.createElement('div');
+    el.className = 'panel-label';
+    el.textContent = String(i + 1).padStart(2, '0');
+    labelLayer.appendChild(el);
+    labels.push(el);
+});
 
-        const rightLight = document.createElement('div');
-        rightLight.className = 'panel-right-light';
-        rightLight.style.background = `linear-gradient(180deg,
-            hsla(${c.h}, ${c.s}%, ${c.l + 18}%, 0.5),
-            hsla(${c.h2}, ${c.s2}%, ${c.l2 + 18}%, 0.4)
-        )`;
-        rightLight.style.boxShadow = `
-            5px 0 15px hsla(${c.h2}, ${c.s2}%, ${c.l2}%, 0.3),
-            0 0 8px hsla(${c.h2}, ${c.s2}%, ${c.l2 + 12}%, 0.2)
-        `;
+function getCarouselTransform(index, active) {
+    const offset = index - active;
+    const absOff = Math.abs(offset);
+    const sign = Math.sign(offset);
 
-        const leftLight = document.createElement('div');
-        leftLight.className = 'panel-left-light';
-        leftLight.style.background = `linear-gradient(180deg,
-            hsla(${c.h}, ${c.s}%, ${c.l + 18}%, 0.4),
-            hsla(${c.h2}, ${c.s2}%, ${c.l2 + 18}%, 0.3)
-        )`;
-        leftLight.style.boxShadow = `
-            -5px 0 15px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.25),
-            0 0 8px hsla(${c.h}, ${c.s}%, ${c.l + 12}%, 0.15)
-        `;
+    let x, z, rotY;
 
-        const halo = document.createElement('div');
-        halo.className = 'panel-halo';
-        halo.style.background = `radial-gradient(
-            ellipse at center,
-            hsla(${c.h}, ${c.s}%, ${c.l}%, 0.5) 0%,
-            hsla(${midH}, ${midS}%, ${midL}%, 0.25) 40%,
-            hsla(${c.h2}, ${c.s2}%, ${c.l2}%, 0.12) 65%,
-            transparent 85%
-        )`;
-        halo.style.opacity = '0.5';
+    if (absOff < 0.01) {
+        x = 0;
+        z = 0;
+        rotY = 0;
+    } else {
+        x = sign * (SPACING * 0.6 + (absOff - 1) * SPACING * 0.85);
+        z = -absOff * FAN_Z;
+        rotY = -sign * FAN_ANGLE * Math.min(absOff, 2.5);
+    }
 
-        const lightCast = document.createElement('div');
-        lightCast.className = 'panel-light-cast';
-        lightCast.style.background = `radial-gradient(
-            ellipse at 50% 20%,
-            hsla(${c.h}, ${c.s}%, ${c.l}%, 0.45) 0%,
-            hsla(${midH}, ${midS}%, ${midL}%, 0.25) 30%,
-            hsla(${c.h2}, ${c.s2}%, ${c.l2}%, 0.15) 50%,
-            transparent 75%
-        )`;
-        lightCast.style.opacity = '0.5';
+    return { x, y: 0.6, z, rotY };
+}
 
-        const numberEl = document.createElement('div');
-        numberEl.className = 'panel-number';
-        numberEl.textContent = num;
+function updateCarousel(dt) {
+    const lerpSpeed = 4.0;
+    const diff = targetIndex - currentIndex;
+    currentIndex += diff * lerpSpeed * dt;
 
-        panel.style.boxShadow = `
-            0 10px 50px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.25),
-            0 3px 15px hsla(${c.h2}, ${c.s2}%, ${c.l2}%, 0.15),
-            inset 0 1px 0 rgba(255,255,255,0.3),
-            inset 0 -1px 0 hsla(${c.h2}, ${c.s2}%, ${c.l2 - 10}%, 0.1)
-        `;
+    if (Math.abs(diff) < 0.001) currentIndex = targetIndex;
 
-        panel.appendChild(faceFront);
-        panel.appendChild(innerGlow);
-        panel.appendChild(edgeRight);
-        panel.appendChild(edgeBottom);
-        panel.appendChild(topLight);
-        panel.appendChild(rightLight);
-        panel.appendChild(leftLight);
-        panel.appendChild(halo);
-        panel.appendChild(lightCast);
-        panel.appendChild(numberEl);
-        sceneInner.appendChild(panel);
+    panelGroups.forEach((group, i) => {
+        const t = getCarouselTransform(i, currentIndex);
 
-        panel.addEventListener('mouseenter', () => onHover(i, true));
-        panel.addEventListener('mouseleave', () => onHover(i, false));
-        panel.addEventListener('click', () => {
+        group.position.x += (t.x - group.position.x) * lerpSpeed * dt;
+        group.position.y += (t.y - group.position.y) * lerpSpeed * dt;
+        group.position.z += (t.z - group.position.z) * lerpSpeed * dt;
+
+        let targetRotY = t.rotY;
+        const currRot = group.rotation.y;
+        group.rotation.y += (targetRotY - currRot) * lerpSpeed * dt;
+
+        const distToActive = Math.abs(i - currentIndex);
+        const isHovered = hoveredIndex === i;
+
+        const baseGlow = distToActive < 0.5 ? 4.5 : Math.max(1.5, 3.5 - distToActive * 0.5);
+        const hoverBoost = isHovered ? 5.0 : 0;
+        glowLights[i].intensity += ((baseGlow + hoverBoost) - glowLights[i].intensity) * 7 * dt;
+
+        const baseFloor = distToActive < 0.5 ? 3.5 : Math.max(1.0, 2.8 - distToActive * 0.4);
+        const floorBoost = isHovered ? 4.0 : 0;
+        floorLights[i].intensity += ((baseFloor + floorBoost) - floorLights[i].intensity) * 7 * dt;
+
+        const targetOpacity = isHovered ? 0.88 : (distToActive < 0.5 ? 0.78 : Math.max(0.48, 0.72 - distToActive * 0.05));
+        panelMeshes[i].material.opacity += (targetOpacity - panelMeshes[i].material.opacity) * 6 * dt;
+
+        const liftTarget = isHovered ? 0.2 : 0;
+        const hoverY = group.userData.hoverLift || 0;
+        group.userData.hoverLift = hoverY + (liftTarget - hoverY) * 7 * dt;
+        group.position.y += group.userData.hoverLift;
+
+        const refl = group.children.find(c => c.userData && c.userData.isReflection);
+        if (refl) {
+            const reflTarget = distToActive < 0.5 ? 0.25 : Math.max(0.08, 0.18 - distToActive * 0.02);
+            const reflHover = isHovered ? 0.2 : 0;
+            refl.material.opacity += ((reflTarget + reflHover) - refl.material.opacity) * 4 * dt;
+        }
+    });
+}
+
+function updateLabels() {
+    const tempVec = new THREE.Vector3();
+
+    panelGroups.forEach((group, i) => {
+        tempVec.set(0, PANEL_SIZE / 2 + 0.4, 0);
+        group.localToWorld(tempVec);
+        tempVec.project(camera);
+
+        const x = (tempVec.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-tempVec.y * 0.5 + 0.5) * window.innerHeight;
+
+        labels[i].style.left = x + 'px';
+        labels[i].style.top = y + 'px';
+
+        const dist = Math.abs(i - currentIndex);
+        if (dist < 0.5) {
+            labels[i].className = 'panel-label active';
+        } else if (dist < 2.5) {
+            labels[i].className = 'panel-label visible';
+        } else {
+            labels[i].className = 'panel-label';
+        }
+    });
+}
+
+function navigate(dir) {
+    targetIndex = Math.max(0, Math.min(N - 1, targetIndex + dir));
+    const hint = document.getElementById('navHint');
+    if (hint) hint.style.opacity = '0';
+}
+
+window.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    scrollAccum += e.deltaY;
+    if (Math.abs(scrollAccum) > 50) {
+        navigate(scrollAccum > 0 ? 1 : -1);
+        scrollAccum = 0;
+    }
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
+});
+
+let touchStartX = 0;
+window.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+window.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 40) navigate(dx < 0 ? 1 : -1);
+});
+
+window.addEventListener('mousemove', (e) => {
+    mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    pointer.set(mouseNDC.x, mouseNDC.y);
+});
+
+window.addEventListener('click', (e) => {
+    if (e.target.tagName === 'A') return;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(panelMeshes);
+    if (hits.length > 0) {
+        const idx = hits[0].object.userData.index;
+        if (Math.abs(idx - targetIndex) < 0.5) {
+            const num = String(idx + 1).padStart(2, '0');
             window.location.hash = '#capitulo-' + num;
-        });
-    });
-
-    function onHover(index, entering) {
-        const allPanels = document.querySelectorAll('.panel');
-        const color = panels[index];
-
-        allPanels.forEach((p, i) => {
-            const c = panels[i];
-            const baseZ = parseFloat(p.dataset.baseZ);
-            const halo = p.querySelector('.panel-halo');
-            const lightCast = p.querySelector('.panel-light-cast');
-            const innerGlow = p.querySelector('.panel-inner-glow');
-            const numberEl = p.querySelector('.panel-number');
-            const topLight = p.querySelector('.panel-top-light');
-            const dist = Math.abs(i - index);
-
-            if (entering) {
-                if (i === index) {
-                    p.style.transform = `translateY(-50%) translateZ(${baseZ + 25}px) translateX(-50%) translateY(-14px)`;
-                    p.style.boxShadow = `
-                        0 30px 80px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.45),
-                        0 10px 30px hsla(${c.h2}, ${c.s2}%, ${c.l2}%, 0.3),
-                        inset 0 1px 0 rgba(255,255,255,0.4),
-                        inset 0 -1px 0 hsla(${c.h2}, ${c.s2}%, ${c.l2 - 10}%, 0.15)
-                    `;
-                    halo.style.opacity = '0.85';
-                    halo.style.inset = '-40px';
-                    halo.style.filter = 'blur(42px)';
-                    lightCast.style.opacity = '0.8';
-                    innerGlow.style.opacity = '0.65';
-                    numberEl.style.color = `hsla(${c.h}, ${c.s}%, ${c.l - 5}%, 0.92)`;
-                    numberEl.style.textShadow = `
-                        0 0 25px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.8),
-                        0 0 60px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.4)
-                    `;
-                    topLight.style.boxShadow = `
-                        0 -10px 25px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.5),
-                        0 0 12px hsla(${c.h}, ${c.s}%, ${c.l + 15}%, 0.4)
-                    `;
-                } else if (dist <= 3) {
-                    const inf = 1 - dist * 0.3;
-                    const dir = i < index ? -1 : 1;
-                    const nudge = (dist === 1 ? 6 : dist === 2 ? 3 : 1.5) * dir;
-
-                    p.style.transform = `translateY(-50%) translateZ(${baseZ}px) translateX(calc(-50% + ${nudge}px)) translateY(${-4 * inf}px)`;
-                    halo.style.opacity = String(0.5 + inf * 0.2);
-                    lightCast.style.opacity = String(0.5 + inf * 0.15);
-                    innerGlow.style.opacity = String(0.4 + inf * 0.1);
-
-                    if (dist === 1) {
-                        numberEl.style.color = `hsla(${c.h}, ${c.s}%, ${c.l - 5}%, ${inf * 0.4})`;
-                        numberEl.style.textShadow = `0 0 15px hsla(${c.h}, ${c.s}%, ${c.l}%, ${inf * 0.3})`;
-                    }
-                }
-            } else {
-                p.style.transform = `translateY(-50%) translateZ(${baseZ}px) translateX(-50%)`;
-                p.style.boxShadow = `
-                    0 10px 50px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.25),
-                    0 3px 15px hsla(${c.h2}, ${c.s2}%, ${c.l2}%, 0.15),
-                    inset 0 1px 0 rgba(255,255,255,0.3),
-                    inset 0 -1px 0 hsla(${c.h2}, ${c.s2}%, ${c.l2 - 10}%, 0.1)
-                `;
-                halo.style.opacity = '0.5';
-                halo.style.inset = '-25px';
-                halo.style.filter = 'blur(30px)';
-                lightCast.style.opacity = '0.5';
-                innerGlow.style.opacity = '0.4';
-                numberEl.style.color = 'rgba(0,0,0,0)';
-                numberEl.style.textShadow = 'none';
-                topLight.style.boxShadow = `
-                    0 -5px 15px hsla(${c.h}, ${c.s}%, ${c.l}%, 0.35),
-                    0 0 8px hsla(${c.h}, ${c.s}%, ${c.l + 15}%, 0.25)
-                `;
-            }
-        });
-
-        const bleeds = bleedLayer.querySelectorAll('.color-bleed');
-        bleeds.forEach((b, i) => {
-            const c = panels[i];
-            if (entering) {
-                const dist = Math.abs(i - index);
-                const inf = Math.max(0, 1 - dist * 0.15);
-                const blendH = c.h + (color.h - c.h) * inf * 0.25;
-                b.style.opacity = String(0.45 + inf * 0.35);
-                b.style.transform = `translate(-50%, 0) scale(${1 + inf * 0.2})`;
-            } else {
-                b.style.opacity = '0.45';
-                b.style.transform = 'translate(-50%, 0) scale(1)';
-            }
-        });
-    }
-
-    let mouseX = 0.5, mouseY = 0.5;
-    let curX = 0.5, curY = 0.5;
-
-    document.addEventListener('mousemove', (e) => {
-        mouseX = e.clientX / window.innerWidth;
-        mouseY = e.clientY / window.innerHeight;
-    });
-
-    function animate() {
-        curX += (mouseX - curX) * 0.03;
-        curY += (mouseY - curY) * 0.03;
-
-        const inner = document.getElementById('sceneInner');
-        if (inner) {
-            const rotY = (curX - 0.5) * 4;
-            const rotX = (curY - 0.5) * -2;
-            inner.style.transform = `rotateY(${rotY}deg) rotateX(${rotX}deg)`;
+        } else {
+            targetIndex = idx;
         }
-
-        requestAnimationFrame(animate);
+        const hint = document.getElementById('navHint');
+        if (hint) hint.style.opacity = '0';
     }
-    animate();
+});
 
-    function handleRoute() {
-        const hash = window.location.hash;
-        const homepage = document.getElementById('homepage');
-        const container = document.getElementById('chapter-container');
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+});
 
-        if (!hash || hash === '#' || hash === '#home') {
-            homepage.style.display = 'block';
-            container.style.display = 'none';
-            container.innerHTML = '';
-        } else if (hash.startsWith('#capitulo-')) {
-            homepage.style.display = 'none';
-            container.style.display = 'block';
-            const num = hash.replace('#capitulo-', '');
-            const chapterMap = {
-                '01': 'cap-01-focus.html',
-                '02': 'cap-02-path.html',
-                '03': 'cap-03-adaptability.html',
-                '04': 'cap-04.html',
-                '05': 'cap-05.html',
-                '06': 'cap-06.html',
-                '07': 'cap-07.html',
-                '08': 'cap-08.html',
-                '09': 'cap-09.html',
-                '10': 'cap-10.html',
-            };
-            const file = chapterMap[num];
-            if (file) {
-                fetch(file)
-                    .then(r => {
-                        if (!r.ok) throw new Error('Not found');
-                        return r.text();
-                    })
-                    .then(html => { container.innerHTML = html; })
-                    .catch(() => {
-                        container.innerHTML = `
-                            <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Inter,sans-serif;">
-                                <div style="text-align:center;">
-                                    <p style="font-size:14px;font-weight:200;letter-spacing:0.2em;color:rgba(0,0,0,0.3);margin-bottom:20px;">CHAPTER ${num}</p>
-                                    <p style="font-size:12px;font-weight:300;color:rgba(0,0,0,0.2);">Coming soon</p>
-                                    <a href="#home" style="display:inline-block;margin-top:30px;font-size:11px;font-weight:300;letter-spacing:0.15em;color:rgba(0,0,0,0.25);text-decoration:none;border-bottom:1px solid rgba(0,0,0,0.1);padding-bottom:2px;">BACK</a>
-                                </div>
+let lastTime = performance.now();
+
+function animate(time) {
+    requestAnimationFrame(animate);
+
+    const dt = Math.min((time - lastTime) / 1000, 0.05);
+    lastTime = time;
+
+    smoothMouse.x += (mouseNDC.x - smoothMouse.x) * 2 * dt;
+    smoothMouse.y += (mouseNDC.y - smoothMouse.y) * 2 * dt;
+
+    camera.position.x = smoothMouse.x * 0.5;
+    camera.position.y = 1.8 + smoothMouse.y * 0.3;
+    camera.lookAt(0, 0.6, 0);
+
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(panelMeshes);
+    hoveredIndex = hits.length > 0 ? hits[0].object.userData.index : -1;
+    renderer.domElement.style.cursor = hoveredIndex >= 0 ? 'pointer' : 'default';
+
+    updateCarousel(dt);
+    updateLabels();
+    composer.render();
+}
+
+function handleRoute() {
+    const hash = window.location.hash;
+    const homepage = document.getElementById('homepage');
+    const container = document.getElementById('chapter-container');
+
+    if (!hash || hash === '#' || hash === '#home') {
+        homepage.style.display = 'block';
+        container.style.display = 'none';
+        container.innerHTML = '';
+    } else if (hash.startsWith('#capitulo-')) {
+        homepage.style.display = 'none';
+        container.style.display = 'block';
+        const num = hash.replace('#capitulo-', '');
+        const chapterMap = {
+            '01': 'cap-01-focus.html',
+            '02': 'cap-02-path.html',
+            '03': 'cap-03-adaptability.html',
+            '04': 'cap-04.html',
+            '05': 'cap-05.html',
+            '06': 'cap-06.html',
+            '07': 'cap-07.html',
+            '08': 'cap-08.html',
+            '09': 'cap-09.html',
+            '10': 'cap-10.html',
+        };
+        const file = chapterMap[num];
+        if (file) {
+            fetch(file)
+                .then(r => {
+                    if (!r.ok) throw new Error('Not found');
+                    return r.text();
+                })
+                .then(html => { container.innerHTML = html; })
+                .catch(() => {
+                    container.innerHTML = `
+                        <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Inter,sans-serif;">
+                            <div style="text-align:center;">
+                                <p style="font-size:14px;font-weight:200;letter-spacing:0.2em;color:rgba(0,0,0,0.3);margin-bottom:20px;">CHAPTER ${num}</p>
+                                <p style="font-size:12px;font-weight:300;color:rgba(0,0,0,0.2);">Coming soon</p>
+                                <a href="#home" style="display:inline-block;margin-top:30px;font-size:11px;font-weight:300;letter-spacing:0.15em;color:rgba(0,0,0,0.25);text-decoration:none;border-bottom:1px solid rgba(0,0,0,0.1);padding-bottom:2px;">BACK</a>
                             </div>
-                        `;
-                    });
-            }
+                        </div>
+                    `;
+                });
         }
     }
+}
 
-    window.addEventListener('hashchange', handleRoute);
-    handleRoute();
+window.addEventListener('hashchange', handleRoute);
+handleRoute();
+requestAnimationFrame(animate);
 
-})();
 </script>
 
 </body>
