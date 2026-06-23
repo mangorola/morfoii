@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BE LIGHT</title>
+    <title>SER LUZ</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400&display=swap');
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -28,6 +28,8 @@
 
         .panel-label {
             position: absolute;
+            top: 0;
+            left: 0;
             font-size: 12px;
             font-weight: 200;
             letter-spacing: 0.2em;
@@ -35,6 +37,7 @@
             transition: color 0.6s ease, text-shadow 0.6s ease;
             user-select: none;
             transform: translate(-50%, -50%);
+            will-change: transform;
         }
         .panel-label.visible {
             color: rgba(80,80,80,0.7);
@@ -128,6 +131,15 @@ let hoveredIndex = -1;
 let mouseNDC = { x: 0, y: 0 };
 let smoothMouse = { x: 0, y: 0 };
 
+// --- performance state ---
+const TARGET_FPS = 30;
+const FRAME_MS = 1000 / TARGET_FPS;
+let lastFrame = 0;
+let idle = false;          // true when the scene has fully settled; skips rendering
+let pointerDirty = true;   // raycast only when the pointer changed or panels are moving
+let prevHovered = -1;
+function wake() { idle = false; }
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf0f0f0);
 scene.fog = new THREE.Fog(0xf0f0f0, 18, 40);
@@ -137,7 +149,7 @@ camera.position.set(0, 1.8, 10);
 camera.lookAt(0, 0.6, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
@@ -316,43 +328,64 @@ function updateCarousel(dt) {
 
     if (Math.abs(diff) < 0.001) currentIndex = targetIndex;
 
+    // accumulates the largest remaining change this frame; used for idle detection
+    let motion = Math.abs(diff);
+
     panelGroups.forEach((group, i) => {
         const t = getCarouselTransform(i, currentIndex);
 
-        group.position.x += (t.x - group.position.x) * lerpSpeed * dt;
-        group.position.y += (t.y - group.position.y) * lerpSpeed * dt;
-        group.position.z += (t.z - group.position.z) * lerpSpeed * dt;
+        const dx = t.x - group.position.x;
+        const dy = t.y - group.position.y;
+        const dz = t.z - group.position.z;
+        group.position.x += dx * lerpSpeed * dt;
+        group.position.y += dy * lerpSpeed * dt;
+        group.position.z += dz * lerpSpeed * dt;
+        motion = Math.max(motion, Math.abs(dx), Math.abs(dy), Math.abs(dz));
 
         let targetRotY = t.rotY;
         const currRot = group.rotation.y;
-        group.rotation.y += (targetRotY - currRot) * lerpSpeed * dt;
+        const dRot = targetRotY - currRot;
+        group.rotation.y += dRot * lerpSpeed * dt;
+        motion = Math.max(motion, Math.abs(dRot));
 
         const distToActive = Math.abs(i - currentIndex);
         const isHovered = hoveredIndex === i;
 
         const baseGlow = distToActive < 0.5 ? 4.5 : Math.max(1.5, 3.5 - distToActive * 0.5);
         const hoverBoost = isHovered ? 5.0 : 0;
-        glowLights[i].intensity += ((baseGlow + hoverBoost) - glowLights[i].intensity) * 7 * dt;
+        const dGlow = (baseGlow + hoverBoost) - glowLights[i].intensity;
+        glowLights[i].intensity += dGlow * 7 * dt;
 
         const baseFloor = distToActive < 0.5 ? 3.5 : Math.max(1.0, 2.8 - distToActive * 0.4);
         const floorBoost = isHovered ? 4.0 : 0;
-        floorLights[i].intensity += ((baseFloor + floorBoost) - floorLights[i].intensity) * 7 * dt;
+        const dFloor = (baseFloor + floorBoost) - floorLights[i].intensity;
+        floorLights[i].intensity += dFloor * 7 * dt;
 
         const targetOpacity = isHovered ? 0.88 : (distToActive < 0.5 ? 0.78 : Math.max(0.48, 0.72 - distToActive * 0.05));
-        panelMeshes[i].material.opacity += (targetOpacity - panelMeshes[i].material.opacity) * 6 * dt;
+        const dOpac = targetOpacity - panelMeshes[i].material.opacity;
+        panelMeshes[i].material.opacity += dOpac * 6 * dt;
 
         const liftTarget = isHovered ? 0.2 : 0;
         const hoverY = group.userData.hoverLift || 0;
         group.userData.hoverLift = hoverY + (liftTarget - hoverY) * 7 * dt;
         group.position.y += group.userData.hoverLift;
 
-        const refl = group.children.find(c => c.userData && c.userData.isReflection);
+        // cache the reflection mesh lookup after the first frame
+        const refl = group.userData.refl ||
+            (group.userData.refl = group.children.find(c => c.userData && c.userData.isReflection));
+        let dRefl = 0;
         if (refl) {
             const reflTarget = distToActive < 0.5 ? 0.25 : Math.max(0.08, 0.18 - distToActive * 0.02);
             const reflHover = isHovered ? 0.2 : 0;
-            refl.material.opacity += ((reflTarget + reflHover) - refl.material.opacity) * 4 * dt;
+            dRefl = (reflTarget + reflHover) - refl.material.opacity;
+            refl.material.opacity += dRefl * 4 * dt;
         }
+
+        // brightness/opacity changes are visible too — weight them into the motion metric
+        motion = Math.max(motion, Math.abs(dGlow) * 0.1, Math.abs(dFloor) * 0.1, Math.abs(dOpac), Math.abs(dRefl));
     });
+
+    return motion;
 }
 
 function updateLabels() {
@@ -366,17 +399,14 @@ function updateLabels() {
         const x = (tempVec.x * 0.5 + 0.5) * window.innerWidth;
         const y = (-tempVec.y * 0.5 + 0.5) * window.innerHeight;
 
-        labels[i].style.left = x + 'px';
-        labels[i].style.top = y + 'px';
+        // transform-only positioning keeps these on the compositor (no layout reflow)
+        labels[i].style.transform = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
 
         const dist = Math.abs(i - currentIndex);
-        if (dist < 0.5) {
-            labels[i].className = 'panel-label active';
-        } else if (dist < 2.5) {
-            labels[i].className = 'panel-label visible';
-        } else {
-            labels[i].className = 'panel-label';
-        }
+        const cls = dist < 0.5 ? 'panel-label active'
+                  : dist < 2.5 ? 'panel-label visible'
+                  : 'panel-label';
+        if (labels[i].className !== cls) labels[i].className = cls;
     });
 }
 
@@ -384,6 +414,7 @@ function navigate(dir) {
     targetIndex = Math.max(0, Math.min(N - 1, targetIndex + dir));
     const hint = document.getElementById('navHint');
     if (hint) hint.style.opacity = '0';
+    wake();
 }
 
 window.addEventListener('wheel', (e) => {
@@ -401,20 +432,30 @@ window.addEventListener('keydown', (e) => {
 });
 
 let touchStartX = 0;
-window.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+window.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
 window.addEventListener('touchend', (e) => {
     const dx = e.changedTouches[0].clientX - touchStartX;
     if (Math.abs(dx) > 40) navigate(dx < 0 ? 1 : -1);
 });
 
+// throttled to ~33 Hz — the parallax/hover is smoothed in the render loop, so
+// sampling the pointer more often than that is wasted work
+let lastMove = 0;
 window.addEventListener('mousemove', (e) => {
+    const now = performance.now();
+    if (now - lastMove < 30) return;
+    lastMove = now;
     mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
     pointer.set(mouseNDC.x, mouseNDC.y);
-});
+    pointerDirty = true;
+    wake();
+}, { passive: true });
 
 window.addEventListener('click', (e) => {
     if (e.target.tagName === 'A') return;
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(panelMeshes);
     if (hits.length > 0) {
@@ -428,6 +469,7 @@ window.addEventListener('click', (e) => {
         const hint = document.getElementById('navHint');
         if (hint) hint.style.opacity = '0';
     }
+    wake();
 });
 
 window.addEventListener('resize', () => {
@@ -435,6 +477,15 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
+    wake();
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        lastTime = performance.now();
+        lastFrame = 0;
+        wake();
+    }
 });
 
 let lastTime = performance.now();
@@ -442,6 +493,18 @@ let lastTime = performance.now();
 function animate(time) {
     requestAnimationFrame(animate);
 
+    // Pause entirely when the tab isn't visible.
+    if (document.hidden) return;
+
+    // Cap the work to ~30fps. The rAF callback still fires at the display rate,
+    // but we only run the simulation/render on frames past the interval.
+    if (time - lastFrame < FRAME_MS - 1) return;
+
+    // Fully settled: nothing is moving and the pointer is parked. Skip the
+    // expensive render entirely until the next interaction calls wake().
+    if (idle) return;
+
+    lastFrame = time;
     const dt = Math.min((time - lastTime) / 1000, 0.05);
     lastTime = time;
 
@@ -452,14 +515,27 @@ function animate(time) {
     camera.position.y = 1.8 + smoothMouse.y * 0.3;
     camera.lookAt(0, 0.6, 0);
 
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(panelMeshes);
-    hoveredIndex = hits.length > 0 ? hits[0].object.userData.index : -1;
-    renderer.domElement.style.cursor = hoveredIndex >= 0 ? 'pointer' : 'default';
+    // Raycast only when the pointer moved or panels are still sliding —
+    // a stationary cursor over a settled scene can't change what's hovered.
+    if (pointerDirty || Math.abs(targetIndex - currentIndex) > 0.001) {
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(panelMeshes);
+        hoveredIndex = hits.length > 0 ? hits[0].object.userData.index : -1;
+        renderer.domElement.style.cursor = hoveredIndex >= 0 ? 'pointer' : 'default';
+        pointerDirty = false;
+    }
 
-    updateCarousel(dt);
+    const motion = updateCarousel(dt);
     updateLabels();
     composer.render();
+
+    // Decide whether the scene has come to rest this frame.
+    const mouseSettled = Math.abs(mouseNDC.x - smoothMouse.x) < 0.0015 &&
+                         Math.abs(mouseNDC.y - smoothMouse.y) < 0.0015;
+    if (motion < 0.0008 && mouseSettled && currentIndex === targetIndex && hoveredIndex === prevHovered) {
+        idle = true;
+    }
+    prevHovered = hoveredIndex;
 }
 
 function handleRoute() {
