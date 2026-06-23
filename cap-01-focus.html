@@ -1,23 +1,126 @@
-<div class="focus-chapter">
-    <style>
-        .focus-chapter {
-            position: fixed;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #000;
-        }
+<!-- Chapter 01 — FOCUS -->
+<!-- Wrapper loaded into index.html via hash routing (#capitulo-01). -->
+<!-- Pure HTML + CSS: no <script>, so it works when injected via innerHTML. -->
+<!-- The simulation lives in cap-01-fluid.html and runs inside the iframe below. -->
 
-        .focus-chapter .focus-video {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            z-index: 1;
-        }
-    </style>
+<style>
+  #cap-01-focus {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
 
-    <video class="focus-video" src="focus.mp4" autoplay loop muted playsinline></video>
-</div>
+  /* Fullscreen simulation — its own scripts run because it's an iframe document. */
+  #cap-01-focus .focus-sim {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: block;
+    z-index: 0;
+  }
+
+  /* Text overlay sits above the canvas but lets clicks pass through to it. */
+  #cap-01-focus .focus-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    padding: 2.5rem 3rem;
+    box-sizing: border-box;
+    color: #fff;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    mix-blend-mode: difference;
+  }
+
+  #cap-01-focus .focus-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  /* The only interactive element: it must capture clicks. */
+  #cap-01-focus .focus-back {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #fff;
+    text-decoration: none;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  #cap-01-focus .focus-back .arrow {
+    display: inline-block;
+    transition: transform 0.3s ease;
+  }
+
+  #cap-01-focus .focus-back:hover .arrow {
+    transform: translateX(-4px);
+  }
+
+  #cap-01-focus .focus-meta {
+    text-align: right;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* Single centered letter "A". */
+  #cap-01-focus .focus-title {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  #cap-01-focus .focus-title h1 {
+    margin: 0;
+    font-size: clamp(6rem, 28vw, 22rem);
+    font-weight: 200;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  @media (max-width: 600px) {
+    #cap-01-focus .focus-overlay {
+      padding: 1.5rem 1.5rem;
+    }
+  }
+</style>
+
+<section id="cap-01-focus">
+  <!-- Isolated document: scripts, shaders and event listeners run normally. -->
+  <iframe
+    class="focus-sim"
+    src="cap-01-fluid.html"
+    title="FOCUS — fluid light simulation"
+    scrolling="no"
+  ></iframe>
+
+  <div class="focus-overlay">
+    <header class="focus-top">
+      <a class="focus-back" href="#home">
+        <span class="arrow">&larr;</span>
+        <span>Índice</span>
+      </a>
+      <div class="focus-meta">
+        <div>01</div>
+      </div>
+    </header>
+
+    <div class="focus-title">
+      <h1>A</h1>
+    </div>
+  </div>
+</section>
