@@ -375,8 +375,18 @@ function updateCarousel(dt) {
     panelGroups.forEach((group, i) => {
         const t = getCarouselTransform(i, currentIndex);
 
+        const distToActive = Math.abs(i - currentIndex);
+        const isHovered = hoveredIndex === i;
+
+        // Smoothly settle a single hover lift offset, then fold it into the
+        // vertical target so position.y is driven by exactly one lerp.
+        const liftTarget = isHovered ? 0.2 : 0;
+        group.userData.lift = (group.userData.lift || 0) +
+            (liftTarget - (group.userData.lift || 0)) * 7 * dt;
+        const targetY = t.y + group.userData.lift;
+
         const dx = t.x - group.position.x;
-        const dy = t.y - group.position.y;
+        const dy = targetY - group.position.y;
         const dz = t.z - group.position.z;
         group.position.x += dx * lerpSpeed * dt;
         group.position.y += dy * lerpSpeed * dt;
@@ -388,9 +398,6 @@ function updateCarousel(dt) {
         const dRot = targetRotY - currRot;
         group.rotation.y += dRot * lerpSpeed * dt;
         motion = Math.max(motion, Math.abs(dRot));
-
-        const distToActive = Math.abs(i - currentIndex);
-        const isHovered = hoveredIndex === i;
 
         const baseGlow = distToActive < 0.5 ? 4.5 : Math.max(1.5, 3.5 - distToActive * 0.5);
         const hoverBoost = isHovered ? 5.0 : 0;
@@ -412,11 +419,6 @@ function updateCarousel(dt) {
         const targetOpacity = isHovered ? 0.88 : (distToActive < 0.5 ? 0.78 : Math.max(0.48, 0.72 - distToActive * 0.05));
         const dOpac = targetOpacity - panelMeshes[i].material.opacity;
         panelMeshes[i].material.opacity += dOpac * 6 * dt;
-
-        const liftTarget = isHovered ? 0.2 : 0;
-        const hoverY = group.userData.hoverLift || 0;
-        group.userData.hoverLift = hoverY + (liftTarget - hoverY) * 7 * dt;
-        group.position.y += group.userData.hoverLift;
 
         // cache the reflection mesh lookup after the first frame
         const refl = group.userData.refl ||
