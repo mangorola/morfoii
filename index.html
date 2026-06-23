@@ -141,8 +141,8 @@ let prevHovered = -1;
 function wake() { idle = false; }
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x00000);
-scene.fog = new THREE.Fog(0xf0f0f0, 18, 40);
+scene.background = new THREE.Color(0x1c1919);
+scene.fog = new THREE.Fog(0x1c1919, 18, 40);
 
 const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(0, 1.8, 10);
