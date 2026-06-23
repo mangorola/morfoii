@@ -1,0 +1,50 @@
+<div class="focus-chapter">
+    <style>
+        .focus-chapter {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .focus-chapter .focus-video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+    </style>
+
+    <video class="focus-video" src="focus.mp4" autoplay loop muted playsinline></video>
+
+    <script>
+    // The source video fades to black around ~9.8s and holds black until its
+    // end (~11.04s). Native looping plays through that black tail before
+    // restarting — a visible flash. Instead we loop back to the start just
+    // before the fade begins, so the motion keeps rolling without going dark.
+    (function () {
+        var root = (document.currentScript && document.currentScript.closest('.focus-chapter'))
+            || document.querySelector('.focus-chapter');
+        var v = root && root.querySelector('.focus-video');
+        if (!v) return;
+
+        var LOOP_END = 9.5;   // restart before the fade-to-black (~9.8s)
+        var START = 0.03;     // skip any black head frame
+
+        v.loop = false;
+        v.addEventListener('timeupdate', function () {
+            if (v.currentTime >= LOOP_END) {
+                v.currentTime = START;
+                v.play();
+            }
+        });
+
+        var p = v.play();
+        if (p && p.catch) p.catch(function () {});
+    })();
+    </script>
+</div>
