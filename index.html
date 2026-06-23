@@ -141,8 +141,8 @@ let prevHovered = -1;
 function wake() { idle = false; }
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1c1919);
-scene.fog = new THREE.Fog(0x1c1919, 18, 40);
+scene.background = new THREE.Color(0xf0f0f0);
+scene.fog = new THREE.Fog(0xf0f0f0, 18, 40);
 
 const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
 camera.position.set(0, 1.8, 10);
@@ -159,7 +159,7 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    0.55, 0.7, 0.5
+    0.4, 0.7, 0.5
 );
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
@@ -186,10 +186,30 @@ floor.rotation.x = -Math.PI / 2;
 floor.position.y = -PANEL_SIZE / 2 - 0.3;
 scene.add(floor);
 
+// Soft circular alpha texture, shared by every colored light pool. The pool
+// meshes are tinted per-panel via material.color, so one texture is enough.
+const poolTexture = (() => {
+    const size = 256;
+    const cnv = document.createElement('canvas');
+    cnv.width = cnv.height = size;
+    const ctx = cnv.getContext('2d');
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0.0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.75)');
+    grad.addColorStop(0.7, 'rgba(255,255,255,0.25)');
+    grad.addColorStop(1.0, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    const tex = new THREE.CanvasTexture(cnv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+})();
+
 const panelGroups = [];
 const panelMeshes = [];
 const glowLights = [];
 const floorLights = [];
+const lightPools = [];
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -289,6 +309,27 @@ PANEL_COLORS.forEach((pc, i) => {
     reflMesh.position.z = 0.3;
     group.add(reflMesh);
     reflMesh.userData.isReflection = true;
+
+    // Colored light pool on the floor — simulates the panel's color being
+    // transmitted onto the surface (Three.js transmission does not project
+    // colored light onto other geometry). Normal blending tints the bright
+    // floor toward the panel color rather than washing it back to white.
+    const poolGeo = new THREE.PlaneGeometry(PANEL_SIZE * 2.2, PANEL_SIZE * 1.6);
+    const poolMat = new THREE.MeshBasicMaterial({
+        map: poolTexture,
+        color: color,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.NormalBlending,
+        side: THREE.DoubleSide,
+    });
+    const poolMesh = new THREE.Mesh(poolGeo, poolMat);
+    poolMesh.rotation.x = -Math.PI / 2;
+    poolMesh.position.y = -PANEL_SIZE / 2 - 0.29;
+    poolMesh.position.z = 0.6;
+    group.add(poolMesh);
+    lightPools.push(poolMesh);
 });
 
 const labelLayer = document.getElementById('labelLayer');
@@ -356,10 +397,17 @@ function updateCarousel(dt) {
         const dGlow = (baseGlow + hoverBoost) - glowLights[i].intensity;
         glowLights[i].intensity += dGlow * 7 * dt;
 
-        const baseFloor = distToActive < 0.5 ? 3.5 : Math.max(1.0, 2.8 - distToActive * 0.4);
-        const floorBoost = isHovered ? 4.0 : 0;
+        const baseFloor = distToActive < 0.5 ? 2.2 : Math.max(0.8, 1.6 - distToActive * 0.3);
+        const floorBoost = isHovered ? 0.7 : 0;
         const dFloor = (baseFloor + floorBoost) - floorLights[i].intensity;
         floorLights[i].intensity += dFloor * 7 * dt;
+
+        // Colored light pool — mirrors the floor light's distance/hover falloff
+        // so the tint is strongest under the active panel and fades with depth.
+        const basePool = distToActive < 0.5 ? 0.55 : Math.max(0.12, 0.45 - distToActive * 0.08);
+        const poolBoost = isHovered ? 0.15 : 0;
+        const dPool = Math.min(0.7, basePool + poolBoost) - lightPools[i].material.opacity;
+        lightPools[i].material.opacity += dPool * 6 * dt;
 
         const targetOpacity = isHovered ? 0.88 : (distToActive < 0.5 ? 0.78 : Math.max(0.48, 0.72 - distToActive * 0.05));
         const dOpac = targetOpacity - panelMeshes[i].material.opacity;
@@ -382,7 +430,7 @@ function updateCarousel(dt) {
         }
 
         // brightness/opacity changes are visible too — weight them into the motion metric
-        motion = Math.max(motion, Math.abs(dGlow) * 0.1, Math.abs(dFloor) * 0.1, Math.abs(dOpac), Math.abs(dRefl));
+        motion = Math.max(motion, Math.abs(dGlow) * 0.1, Math.abs(dFloor) * 0.1, Math.abs(dOpac), Math.abs(dRefl), Math.abs(dPool));
     });
 
     return motion;
