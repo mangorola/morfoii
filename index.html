@@ -1,656 +1,502 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SER LUZ</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #f0f0f0;
-            overflow: hidden;
-            width: 100vw;
-            height: 100vh;
-            font-family: 'Space Grotesk', sans-serif;
-        }
-        #homepage { width: 100%; height: 100%; position: relative; }
-        #chapter-container { display: none; width: 100%; height: 100%; }
-        canvas { display: block; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LA VIDA EN COLOR</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@200..500&family=Space+Mono:wght@400;500&display=swap');
 
-        .label-layer {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            pointer-events: none;
-            z-index: 5;
-        }
+  :root {
+    --bg: #f4f4f1;
+    --fg: #1a1a1a;
+    --fg-dim: rgba(26, 26, 26, 0.5);
+    --guide: #D9D9D9;
+    --guide-width: 1.73px;
+    --node-fill: #B0B0B0;
+    --node-text: #ffffff;
+    --node-veiled: #ECECEC;
+    --node-veiled-text: #C8C8C8;
+  }
+  :root.dark {
+    --bg: #0a0a0a;
+    --fg: #f4f4f1;
+    --fg-dim: rgba(244, 244, 241, 0.55);
+    --guide: #2a2a2a;
+    --node-fill: #6e6e6e;
+    --node-text: #f4f4f1;
+    --node-veiled: #1f1f1f;
+    --node-veiled-text: #3a3a3a;
+  }
 
-        .panel-label {
-            position: absolute;
-            top: 0;
-            left: 0;
-            font-size: 9px;
-            font-weight: 200;
-            letter-spacing: 0.2em;
-            color: rgba(0,0,0,0);
-            transition: color 0.6s ease, text-shadow 0.6s ease;
-            user-select: none;
-            transform: translate(-50%, -50%);
-            will-change: transform;
-        }
-        .panel-label.visible {
-            color: rgba(80,80,80,0.7);
-        }
-        .panel-label.active {
-            color: rgba(60,60,60,0.85);
-        }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Space Grotesk', sans-serif;
+    overflow: hidden;
+    transition: background 0.45s ease, color 0.45s ease;
+  }
 
-        .title-area {
-            position: fixed;
-            bottom: clamp(20px, 3.5vh, 45px);
-            left: 50%;
-            transform: translateX(-50%);
-            text-align: center;
-            z-index: 10;
-            pointer-events: none;
-        }
-        .title-main {
-            font-size: clamp(10px, 0.9vw, 14px);
-            font-weight: 200;
-            letter-spacing: 0.4em;
-            color: rgba(0,0,0,0.15);
-        }
+  /* Full-bleed stage: SVG fills the entire viewport. No centring container,
+     no fixed canvas — the frame is inset by CONFIG.margin from the REAL
+     viewport edges, and the geometry is recomputed on every resize. */
+  #homepage {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  #chapter-container {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    position: absolute;
+    inset: 0;
+  }
 
-        .nav-hint {
-            position: fixed;
-            bottom: clamp(50px, 7vh, 80px);
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 10px;
-            font-weight: 300;
-            letter-spacing: 0.15em;
-            color: rgba(0,0,0,0.12);
-            z-index: 10;
-            pointer-events: none;
-            opacity: 1;
-            transition: opacity 2s ease;
-        }
-    </style>
+  .board {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    position: absolute;
+    inset: 0;
+  }
+
+  /* === Title ============================================================= */
+  .title {
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.32em;
+    fill: var(--fg-dim);
+    text-anchor: middle;
+    dominant-baseline: middle;
+    user-select: none;
+    transition: fill 0.45s ease;
+  }
+
+  /* === Guide grid (frame + subtle internal verticals/horizontals) ======== */
+  .guide-frame {
+    fill: none;
+    stroke: var(--guide);
+    stroke-width: var(--guide-width);
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.45s ease;
+    pointer-events: none;
+  }
+  .guide-internal {
+    fill: none;
+    stroke: var(--guide);
+    stroke-width: var(--guide-internal-width);
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.45s ease;
+    pointer-events: none;
+  }
+
+  /* Background mask behind the titles — hides the frame line under the text. */
+  .title-bg {
+    fill: var(--bg);
+    stroke: none;
+    pointer-events: none;
+    transition: fill 0.45s ease;
+  }
+
+  /* === Circles ============================================================ */
+  .circle-outline {
+    fill: none;
+    stroke: var(--guide);
+    stroke-width: var(--guide-width);
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+    transition: stroke 0.45s ease;
+  }
+
+  /* RGB tint fills — additive screen blend; opacity drives the hover hook. */
+  .circle-tint {
+    mix-blend-mode: screen;
+    transition: fill-opacity 0.7s ease;
+    pointer-events: none;
+  }
+
+  /* Invisible hover targets — sit under the nodes so node clicks win */
+  .circle-hit {
+    fill: transparent;
+    stroke: none;
+    pointer-events: all;
+    cursor: default;
+  }
+
+  /* === Nodes ============================================================= */
+  .node { cursor: pointer; }
+  .node .node-bg {
+    fill: var(--node-fill);
+    stroke: none;
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform 0.28s ease, fill 0.45s ease, filter 0.28s ease;
+  }
+  .node .node-num {
+    font-family: 'Space Mono', monospace;
+    font-weight: 500;
+    fill: var(--node-text);
+    text-anchor: middle;
+    dominant-baseline: central;
+    letter-spacing: 0.05em;
+    user-select: none;
+    pointer-events: none;
+    transition: fill 0.45s ease;
+  }
+  .node:hover .node-bg {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 6px var(--fg-dim));
+  }
+
+  /* Node 11 — Da'ath, veiled. Inert. */
+  .node.veiled { cursor: default; }
+  .node.veiled .node-bg { fill: var(--node-veiled); }
+  .node.veiled .node-num { fill: var(--node-veiled-text); }
+  .node.veiled:hover .node-bg { transform: none; filter: none; }
+
+  /* === Theme toggle ====================================================== */
+  .theme-toggle {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.5rem;
+    background: none;
+    border: none;
+    color: var(--fg-dim);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 400;
+    letter-spacing: 0.32em;
+    cursor: pointer;
+    padding: 0.4rem 0.2rem;
+    z-index: 20;
+    user-select: none;
+    transition: color 0.3s ease;
+  }
+  .theme-toggle:hover { color: var(--fg); }
+  body.chapter-active .theme-toggle { display: none; }
+
+  @media (max-width: 600px) {
+    .theme-toggle { top: 0.8rem; right: 0.8rem; font-size: 0.55rem; }
+  }
+</style>
 </head>
 <body>
 
+<button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema">○ LUZ</button>
+
 <div id="homepage">
-    <div class="label-layer" id="labelLayer"></div>
-    <div class="title-area"><div class="title-main">SER LUZ</div></div>
-    <div class="nav-hint" id="navHint">SCROLL PARA EXPLORAR</div>
+  <!-- The board is built from CONFIG below — see the bootstrap script. -->
+  <svg class="board" preserveAspectRatio="xMidYMid meet" aria-label="LA VIDA EN COLOR — mapa de capítulos"></svg>
 </div>
 
 <div id="chapter-container"></div>
 
-<script type="importmap">
-{
-    "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+<script>
+  // =====================================================================
+  // CONFIG — single source of truth for the Tree homepage composition.
+  // Tune values here; the SVG rebuilds on load.
+  // =====================================================================
+  const CONFIG = {
+    // Full-bleed stage: the SVG fills 100vw × 100vh and its viewBox tracks
+    // the actual viewport pixels. Everything below is RESPONSIVE — the build
+    // function runs on load AND on every resize.
+
+    // Outer frame margin from the REAL viewport edges, in CSS pixels.
+    margin: 64,
+
+    // Guide lines — frame (4 outer lines) + subtle internal column/row grid.
+    guide: {
+      color: '#D9D9D9',         // light-mode colour (dark mode is in CSS)
+      frameWidth: 1.73,         // 1.0pt ≈ 1.73px — frame stroke
+      internalWidth: 0.6,       // subtle internal guides (thinner)
+    },
+    showInternalGuides: true,   // set false to keep only the 4-line frame
+
+    // Three large circles — additive RGB primaries.
+    //   • LEFT  : cx = frameLeft  + R  (left  edge touches left  frame line)
+    //   • MIDDLE: cx = viewportCx       (centred horizontally on the page)
+    //   • RIGHT : cx = frameRight − R  (right edge touches right frame line)
+    //   All three share circleCy = vertical centre of the inner frame (=
+    //   middle node row).
+    // R is derived from inner frame WIDTH and clamped so circles fit
+    // vertically. R must be > innerWidth/4 for L–R to overlap in the middle.
+    circleRadiusFraction: 0.32, // R = max(this·innerW, innerW/4+1) ∧ ≤ innerH/2
+    circleColors: {
+      r: '#ff0000',  // LEFT
+      g: '#00ff00',  // MIDDLE
+      b: '#1060ff',  // RIGHT
+    },
+
+    // Additive-light hover hook. Hovering a circle fades its tint in; the
+    // mix-blend-mode: screen on the tint group makes overlap zones combine
+    // toward yellow / cyan / magenta / white (visible in dark mode).
+    tint: {
+      rest: 0.00,
+      hover: 0.55,
+      fadeMs: 700,
+    },
+
+    // 11 nodes in a 3-row staggered grid. Coordinates are FRACTIONS of the
+    // inner frame (0..1). Origin (0,0) is the inner-frame top-left corner.
+    //   xFrac : horizontal position within inner frame width
+    //   row   : 'top' | 'mid' | 'bot' → looks up rows[row] for yFrac
+    //   veiled: node 11 (Da'ath) — undefined / non-routing
+    rows: { top: 0.293, mid: 0.500, bot: 0.707 },
+    nodeRadius: 26,        // fixed pixel size — clickable target stays constant
+    veiledRadius: 24,
+    nodes: [
+      { num: '01', xFrac: 0.083, row: 'mid' },                 // far left
+      { num: '02', xFrac: 0.193, row: 'top' },
+      { num: '03', xFrac: 0.193, row: 'bot' },
+      { num: '11', xFrac: 0.291, row: 'mid', veiled: true },   // Da'ath
+      { num: '04', xFrac: 0.390, row: 'top' },
+      { num: '05', xFrac: 0.390, row: 'bot' },
+      { num: '06', xFrac: 0.500, row: 'mid' },                 // triple overlap
+      { num: '07', xFrac: 0.610, row: 'top' },
+      { num: '08', xFrac: 0.610, row: 'bot' },
+      { num: '09', xFrac: 0.720, row: 'mid' },
+      { num: '10', xFrac: 0.851, row: 'mid' },                 // far right
+    ],
+
+    // Titles — "LA VIDA EN COLOR" sits ON the frame lines (top + bottom),
+    // mirrored at the bottom. A background mask hides the frame line where
+    // it would cut through the letters.
+    title: {
+      text: 'LA VIDA EN COLOR',
+      fontSize: 14,
+      bgPaddingX: 18,   // horizontal padding around text in the bg mask
+      bgPaddingY: 3,    // vertical padding around text in the bg mask
+    },
+  };
+
+  // =====================================================================
+  // Build the SVG from CONFIG + the live viewport. Runs on load AND on every
+  // resize, so the frame, circles and nodes track the real viewport edges.
+  // =====================================================================
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const board = document.querySelector('.board');
+
+  // Push CONFIG-controlled style values into CSS custom properties.
+  const rootEl = document.documentElement;
+  rootEl.style.setProperty('--guide-width', CONFIG.guide.frameWidth + 'px');
+  rootEl.style.setProperty('--guide-internal-width', CONFIG.guide.internalWidth + 'px');
+  if (!rootEl.classList.contains('dark')) {
+    rootEl.style.setProperty('--guide', CONFIG.guide.color);
+  }
+
+  function svgEl(name, attrs, text) {
+    const el = document.createElementNS(svgNS, name);
+    if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
+    if (text != null) el.textContent = text;
+    return el;
+  }
+
+  // Hover state kept across rebuilds so resizing while hovered doesn't flicker.
+  const tintState = { r: CONFIG.tint.rest, g: CONFIG.tint.rest, b: CONFIG.tint.rest };
+
+  function build() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const M = CONFIG.margin;
+    const innerW = Math.max(0, W - 2 * M);
+    const innerH = Math.max(0, H - 2 * M);
+    const frameLeft  = M;
+    const frameRight = W - M;
+    const frameTop   = M;
+    const frameBot   = H - M;
+    const cxFrame    = W / 2;
+    const cyFrame    = H / 2;  // == frameTop + innerH/2 == middle node row
+
+    // Circle radius: target = CONFIG fraction of inner width, but clamp to fit
+    // vertically AND to satisfy R > innerW/4 (so L–R overlap exists).
+    const minR = innerW / 4 + 1;
+    const maxR = innerH / 2;
+    let R = CONFIG.circleRadiusFraction * innerW;
+    if (R < minR) R = minR;
+    if (R > maxR) R = maxR;
+
+    // Three circle centres derived from the live frame.
+    const circles = [
+      { id: 'r', cx: frameLeft  + R, color: CONFIG.circleColors.r },  // LEFT
+      { id: 'g', cx: cxFrame,        color: CONFIG.circleColors.g },  // MIDDLE
+      { id: 'b', cx: frameRight - R, color: CONFIG.circleColors.b },  // RIGHT
+    ];
+
+    // SVG viewBox tracks the viewport — 1 SVG unit = 1 CSS pixel.
+    board.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+    // Tear down and rebuild. Cheap at this element count and avoids divergent
+    // state between attributes and listeners.
+    while (board.firstChild) board.removeChild(board.firstChild);
+
+    // --- Subtle internal guides (behind everything) ----------------------
+    if (CONFIG.showInternalGuides) {
+      // Verticals: one per unique node column (xFrac → absolute x).
+      const colXs = [...new Set(CONFIG.nodes.map(n => frameLeft + n.xFrac * innerW))]
+        .sort((a, b) => a - b);
+      colXs.forEach(x => {
+        board.appendChild(svgEl('line', {
+          class: 'guide-internal',
+          x1: x, y1: frameTop, x2: x, y2: frameBot,
+        }));
+      });
+      // Horizontals: one per unique node row.
+      const rowYs = [...new Set(CONFIG.nodes.map(n => frameTop + CONFIG.rows[n.row] * innerH))]
+        .sort((a, b) => a - b);
+      rowYs.forEach(y => {
+        board.appendChild(svgEl('line', {
+          class: 'guide-internal',
+          x1: frameLeft, y1: y, x2: frameRight, y2: y,
+        }));
+      });
     }
-}
-</script>
 
-<script type="module">
-import * as THREE from 'three';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+    // --- Three circles: tints (additive blend) ---------------------------
+    const tintGroup = svgEl('g', { id: 'rgb-tints', style: 'isolation: isolate' });
+    const tintEls = {};
+    circles.forEach(c => {
+      const t = svgEl('circle', {
+        class: 'circle-tint',
+        cx: c.cx, cy: cyFrame, r: R,
+        fill: c.color,
+        'fill-opacity': tintState[c.id],
+      });
+      tintEls[c.id] = t;
+      tintGroup.appendChild(t);
+    });
+    board.appendChild(tintGroup);
 
-const PANEL_COLORS = [
-    { name: 'Red',          h: 0,   s: 1.0,  l: 0.50, hex: '#ff0000' },
-    { name: 'Red-Orange',   h: 15,  s: 1.0,  l: 0.50, hex: '#ff4400' },
-    { name: 'Orange',       h: 28,  s: 1.0,  l: 0.50, hex: '#ff7700' },
-    { name: 'Amber',        h: 40,  s: 1.0,  l: 0.50, hex: '#ff9900' },
-    { name: 'Yellow',       h: 52,  s: 1.0,  l: 0.50, hex: '#ffd500' },
-    { name: 'Yellow-Green', h: 72,  s: 0.95, l: 0.45, hex: '#6ecc00' },
-    { name: 'Green-Cyan',   h: 155, s: 0.90, l: 0.42, hex: '#0ad468' },
-    { name: 'Cyan',         h: 182, s: 0.95, l: 0.44, hex: '#05c8d8' },
-    { name: 'Blue-Cyan',    h: 200, s: 0.95, l: 0.46, hex: '#0590e0' },
-    { name: 'Blue',         h: 218, s: 0.92, l: 0.50, hex: '#1060e8' },
-];
-
-const N = PANEL_COLORS.length;
-const PANEL_SIZE = 2.8;
-const PANEL_THICKNESS = 0.12;
-const SPACING = 3.2;
-const FAN_ANGLE = Math.PI * 0.18;
-const FAN_Z = 1.8;
-
-let currentIndex = 0;
-let targetIndex = 0;
-let scrollAccum = 0;
-let hoveredIndex = -1;
-let mouseNDC = { x: 0, y: 0 };
-let smoothMouse = { x: 0, y: 0 };
-
-// --- performance state ---
-const TARGET_FPS = 30;
-const FRAME_MS = 1000 / TARGET_FPS;
-let lastFrame = 0;
-let idle = false;          // true when the scene has fully settled; skips rendering
-let pointerDirty = true;   // raycast only when the pointer changed or panels are moving
-let prevHovered = -1;
-function wake() { idle = false; }
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf0f0f0);
-scene.fog = new THREE.Fog(0xf0f0f0, 18, 40);
-
-const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 1.8, 10);
-camera.lookAt(0, 0.6, 0);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
-document.getElementById('homepage').insertBefore(renderer.domElement, document.getElementById('labelLayer'));
-
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
-    0.4, 0.7, 0.5
-);
-composer.addPass(bloomPass);
-composer.addPass(new OutputPass());
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-scene.add(ambientLight);
-
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(5, 10, 8);
-scene.add(dirLight);
-
-const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
-backLight.position.set(-3, 5, -5);
-scene.add(backLight);
-
-const floorGeo = new THREE.PlaneGeometry(60, 30);
-const floorMat = new THREE.MeshStandardMaterial({
-    color: 0xf2f2f2,
-    roughness: 0.4,
-    metalness: 0.0,
-});
-const floor = new THREE.Mesh(floorGeo, floorMat);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = -PANEL_SIZE / 2 - 0.3;
-scene.add(floor);
-
-// Soft circular alpha texture, shared by every colored light pool. The pool
-// meshes are tinted per-panel via material.color, so one texture is enough.
-const poolTexture = (() => {
-    const size = 256;
-    const cnv = document.createElement('canvas');
-    cnv.width = cnv.height = size;
-    const ctx = cnv.getContext('2d');
-    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    grad.addColorStop(0.0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.35, 'rgba(255,255,255,0.75)');
-    grad.addColorStop(0.7, 'rgba(255,255,255,0.25)');
-    grad.addColorStop(1.0, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-    const tex = new THREE.CanvasTexture(cnv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-})();
-
-const panelGroups = [];
-const panelMeshes = [];
-const glowLights = [];
-const floorLights = [];
-const lightPools = [];
-
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-
-PANEL_COLORS.forEach((pc, i) => {
-    const color = new THREE.Color(pc.hex);
-
-    const group = new THREE.Group();
-    scene.add(group);
-    panelGroups.push(group);
-
-    const geo = new THREE.BoxGeometry(PANEL_SIZE, PANEL_SIZE, PANEL_THICKNESS, 1, 1, 1);
-    const mat = new THREE.MeshPhysicalMaterial({
-        color: color,
-        transparent: true,
-        opacity: 0.82,
-        roughness: 0.12,
-        metalness: 0.0,
-        transmission: 0.5,
-        thickness: 2.5,
-        ior: 1.45,
-        clearcoat: 0.3,
-        clearcoatRoughness: 0.2,
-        envMapIntensity: 0.5,
-        side: THREE.DoubleSide,
+    // --- Circle outlines ------------------------------------------------
+    circles.forEach(c => {
+      board.appendChild(svgEl('circle', {
+        class: 'circle-outline',
+        cx: c.cx, cy: cyFrame, r: R,
+      }));
     });
 
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.userData.index = i;
-    group.add(mesh);
-    panelMeshes.push(mesh);
-
-    const edgeColor = color.clone().multiplyScalar(0.85);
-    const edgeMatRight = new THREE.MeshPhysicalMaterial({
-        color: edgeColor,
-        transparent: true,
-        opacity: 0.85,
-        roughness: 0.08,
-        metalness: 0.05,
-        clearcoat: 0.5,
-        side: THREE.DoubleSide,
+    // --- Hover targets (under nodes; nodes capture clicks on top) -------
+    // Hook: extend to track multi-cursor / touch state.
+    circles.forEach(c => {
+      const hit = svgEl('circle', {
+        class: 'circle-hit',
+        cx: c.cx, cy: cyFrame, r: R,
+        'data-tint': c.id,
+      });
+      hit.addEventListener('mouseenter', () => {
+        tintState[c.id] = CONFIG.tint.hover;
+        tintEls[c.id].setAttribute('fill-opacity', CONFIG.tint.hover);
+      });
+      hit.addEventListener('mouseleave', () => {
+        tintState[c.id] = CONFIG.tint.rest;
+        tintEls[c.id].setAttribute('fill-opacity', CONFIG.tint.rest);
+      });
+      board.appendChild(hit);
     });
 
-    const rightEdge = new THREE.Mesh(
-        new THREE.PlaneGeometry(PANEL_THICKNESS, PANEL_SIZE),
-        edgeMatRight
-    );
-    rightEdge.position.set(PANEL_SIZE / 2, 0, 0);
-    rightEdge.rotation.y = Math.PI / 2;
-    group.add(rightEdge);
-
-    const leftEdge = new THREE.Mesh(
-        new THREE.PlaneGeometry(PANEL_THICKNESS, PANEL_SIZE),
-        edgeMatRight.clone()
-    );
-    leftEdge.position.set(-PANEL_SIZE / 2, 0, 0);
-    leftEdge.rotation.y = -Math.PI / 2;
-    group.add(leftEdge);
-
-    const topEdge = new THREE.Mesh(
-        new THREE.PlaneGeometry(PANEL_SIZE, PANEL_THICKNESS),
-        edgeMatRight.clone()
-    );
-    topEdge.position.set(0, PANEL_SIZE / 2, 0);
-    topEdge.rotation.x = Math.PI / 2;
-    group.add(topEdge);
-
-    const bottomEdge = new THREE.Mesh(
-        new THREE.PlaneGeometry(PANEL_SIZE, PANEL_THICKNESS),
-        edgeMatRight.clone()
-    );
-    bottomEdge.position.set(0, -PANEL_SIZE / 2, 0);
-    bottomEdge.rotation.x = -Math.PI / 2;
-    group.add(bottomEdge);
-
-    const glowLight = new THREE.PointLight(color, 2.5, 10, 1.4);
-    glowLight.position.set(0, 0, 0.5);
-    group.add(glowLight);
-    glowLights.push(glowLight);
-
-    const floorLight = new THREE.PointLight(color, 2.0, 8, 1.6);
-    floorLight.position.set(0, -PANEL_SIZE / 2 - 0.2, 0.3);
-    group.add(floorLight);
-    floorLights.push(floorLight);
-
-    const reflGeo = new THREE.PlaneGeometry(PANEL_SIZE * 1.4, PANEL_SIZE * 0.7);
-    const reflMat = new THREE.MeshBasicMaterial({
-        color: color,
-        transparent: true,
-        opacity: 0.14,
-        side: THREE.DoubleSide,
-        depthWrite: false,
+    // --- Nodes (drawn last; own pointer events) -------------------------
+    CONFIG.nodes.forEach(n => {
+      const nx = frameLeft + n.xFrac * innerW;
+      const ny = frameTop  + CONFIG.rows[n.row] * innerH;
+      const r  = n.veiled ? CONFIG.veiledRadius : CONFIG.nodeRadius;
+      const g  = svgEl('g', {
+        class: 'node' + (n.veiled ? ' veiled' : ''),
+        'data-num': n.num,
+      });
+      g.appendChild(svgEl('circle', { class: 'node-bg', cx: nx, cy: ny, r }));
+      g.appendChild(svgEl('text', {
+        class: 'node-num',
+        x: nx, y: ny,
+        'font-size': r * 0.55,
+      }, n.num));
+      if (!n.veiled) {
+        g.addEventListener('click', () => {
+          window.location.hash = '#capitulo-' + n.num;
+        });
+      }
+      board.appendChild(g);
     });
-    const reflMesh = new THREE.Mesh(reflGeo, reflMat);
-    reflMesh.rotation.x = -Math.PI / 2;
-    reflMesh.position.y = -PANEL_SIZE / 2 - 0.28;
-    reflMesh.position.z = 0.3;
-    group.add(reflMesh);
-    reflMesh.userData.isReflection = true;
 
-    // Colored light pool on the floor — simulates the panel's color being
-    // transmitted onto the surface (Three.js transmission does not project
-    // colored light onto other geometry). Normal blending tints the bright
-    // floor toward the panel color rather than washing it back to white.
-    const poolGeo = new THREE.PlaneGeometry(PANEL_SIZE * 2.2, PANEL_SIZE * 1.6);
-    const poolMat = new THREE.MeshBasicMaterial({
-        map: poolTexture,
-        color: color,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        blending: THREE.NormalBlending,
-        side: THREE.DoubleSide,
-    });
-    const poolMesh = new THREE.Mesh(poolGeo, poolMat);
-    poolMesh.rotation.x = -Math.PI / 2;
-    poolMesh.position.y = -PANEL_SIZE / 2 - 0.29;
-    poolMesh.position.z = 0.6;
-    group.add(poolMesh);
-    lightPools.push(poolMesh);
-});
+    // --- Frame: 4 outer lines (drawn AFTER circles so they sit on top
+    //     where the circles touch the frame) ----------------------------
+    board.appendChild(svgEl('line', { class: 'guide-frame', x1: frameLeft,  y1: frameTop, x2: frameRight, y2: frameTop })); // top
+    board.appendChild(svgEl('line', { class: 'guide-frame', x1: frameLeft,  y1: frameBot, x2: frameRight, y2: frameBot })); // bottom
+    board.appendChild(svgEl('line', { class: 'guide-frame', x1: frameLeft,  y1: frameTop, x2: frameLeft,  y2: frameBot })); // left
+    board.appendChild(svgEl('line', { class: 'guide-frame', x1: frameRight, y1: frameTop, x2: frameRight, y2: frameBot })); // right
 
-const labelLayer = document.getElementById('labelLayer');
-const labels = [];
-PANEL_COLORS.forEach((pc, i) => {
-    const el = document.createElement('div');
-    el.className = 'panel-label';
-    el.textContent = String(i + 1).padStart(2, '0');
-    labelLayer.appendChild(el);
-    labels.push(el);
-});
+    // --- Titles ON the frame lines (with bg mask) -----------------------
+    function placeTitleOnFrame(yLine, mirrored) {
+      const t = svgEl('text', {
+        class: 'title',
+        x: cxFrame,
+        y: yLine,
+        'font-size': CONFIG.title.fontSize,
+      }, CONFIG.title.text);
+      if (mirrored) t.setAttribute('transform', `rotate(180 ${cxFrame} ${yLine})`);
+      board.appendChild(t);
 
-function getCarouselTransform(index, active) {
-    const offset = index - active;
-    const absOff = Math.abs(offset);
-    const sign = Math.sign(offset);
+      // Mask the frame line behind the text. Rotation is around the text
+      // centre, so the unrotated bbox aligns either way.
+      const bb = t.getBBox();
+      const px = CONFIG.title.bgPaddingX;
+      const py = CONFIG.title.bgPaddingY;
+      board.insertBefore(svgEl('rect', {
+        class: 'title-bg',
+        x: bb.x - px, y: bb.y - py,
+        width:  bb.width  + 2 * px,
+        height: bb.height + 2 * py,
+      }), t);
+    }
+    placeTitleOnFrame(frameTop, false);
+    placeTitleOnFrame(frameBot, true);
+  }
 
-    let x, z, rotY;
+  // Initial build + rebuild on resize (rAF-throttled).
+  let rafPending = false;
+  function scheduleBuild() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => { rafPending = false; build(); });
+  }
+  build();
+  window.addEventListener('resize', scheduleBuild);
+  // Rebuild once fonts load — title bg-mask sizing depends on the real metrics.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(build).catch(() => {});
+  }
 
-    if (absOff < 0.01) {
-        x = 0;
-        z = 0;
-        rotY = 0;
+  // =====================================================================
+  // Theme — light / dark, persisted in localStorage.
+  // =====================================================================
+  const stored = localStorage.getItem('beLight.theme');
+  if (stored === 'dark') rootEl.classList.add('dark');
+
+  const toggle = document.getElementById('themeToggle');
+  function syncToggle() {
+    toggle.textContent = rootEl.classList.contains('dark') ? '● OSC' : '○ LUZ';
+  }
+  function applyGuideForTheme() {
+    if (rootEl.classList.contains('dark')) {
+      rootEl.style.removeProperty('--guide');  // let :root.dark { --guide } win
     } else {
-        x = sign * (SPACING * 0.6 + (absOff - 1) * SPACING * 0.85);
-        z = -absOff * FAN_Z;
-        rotY = -sign * FAN_ANGLE * Math.min(absOff, 2.5);
+      rootEl.style.setProperty('--guide', CONFIG.guide.color);
     }
-
-    return { x, y: 0.6, z, rotY };
-}
-
-function updateCarousel(dt) {
-    const lerpSpeed = 4.0;
-    const diff = targetIndex - currentIndex;
-    currentIndex += diff * lerpSpeed * dt;
-
-    if (Math.abs(diff) < 0.001) currentIndex = targetIndex;
-
-    // accumulates the largest remaining change this frame; used for idle detection
-    let motion = Math.abs(diff);
-
-    panelGroups.forEach((group, i) => {
-        const t = getCarouselTransform(i, currentIndex);
-
-        const distToActive = Math.abs(i - currentIndex);
-        const isHovered = hoveredIndex === i;
-
-        // Smoothly settle a single hover lift offset, then fold it into the
-        // vertical target so position.y is driven by exactly one lerp.
-        const liftTarget = isHovered ? 0.2 : 0;
-        group.userData.lift = (group.userData.lift || 0) +
-            (liftTarget - (group.userData.lift || 0)) * 7 * dt;
-        const targetY = t.y + group.userData.lift;
-
-        const dx = t.x - group.position.x;
-        const dy = targetY - group.position.y;
-        const dz = t.z - group.position.z;
-        group.position.x += dx * lerpSpeed * dt;
-        group.position.y += dy * lerpSpeed * dt;
-        group.position.z += dz * lerpSpeed * dt;
-        motion = Math.max(motion, Math.abs(dx), Math.abs(dy), Math.abs(dz));
-
-        let targetRotY = t.rotY;
-        const currRot = group.rotation.y;
-        const dRot = targetRotY - currRot;
-        group.rotation.y += dRot * lerpSpeed * dt;
-        motion = Math.max(motion, Math.abs(dRot));
-
-        const baseGlow = distToActive < 0.5 ? 4.5 : Math.max(1.5, 3.5 - distToActive * 0.5);
-        const hoverBoost = isHovered ? 5.0 : 0;
-        const dGlow = (baseGlow + hoverBoost) - glowLights[i].intensity;
-        glowLights[i].intensity += dGlow * 7 * dt;
-
-        const baseFloor = distToActive < 0.5 ? 2.2 : Math.max(0.8, 1.6 - distToActive * 0.3);
-        const floorBoost = isHovered ? 0.7 : 0;
-        const dFloor = (baseFloor + floorBoost) - floorLights[i].intensity;
-        floorLights[i].intensity += dFloor * 7 * dt;
-
-        // Colored light pool — mirrors the floor light's distance/hover falloff
-        // so the tint is strongest under the active panel and fades with depth.
-        const basePool = distToActive < 0.5 ? 0.55 : Math.max(0.12, 0.45 - distToActive * 0.08);
-        const poolBoost = isHovered ? 0.15 : 0;
-        const dPool = Math.min(0.7, basePool + poolBoost) - lightPools[i].material.opacity;
-        lightPools[i].material.opacity += dPool * 6 * dt;
-
-        const targetOpacity = isHovered ? 0.88 : (distToActive < 0.5 ? 0.78 : Math.max(0.48, 0.72 - distToActive * 0.05));
-        const dOpac = targetOpacity - panelMeshes[i].material.opacity;
-        panelMeshes[i].material.opacity += dOpac * 6 * dt;
-
-        // cache the reflection mesh lookup after the first frame
-        const refl = group.userData.refl ||
-            (group.userData.refl = group.children.find(c => c.userData && c.userData.isReflection));
-        let dRefl = 0;
-        if (refl) {
-            const reflTarget = distToActive < 0.5 ? 0.25 : Math.max(0.08, 0.18 - distToActive * 0.02);
-            const reflHover = isHovered ? 0.2 : 0;
-            dRefl = (reflTarget + reflHover) - refl.material.opacity;
-            refl.material.opacity += dRefl * 4 * dt;
-        }
-
-        // brightness/opacity changes are visible too — weight them into the motion metric
-        motion = Math.max(motion, Math.abs(dGlow) * 0.1, Math.abs(dFloor) * 0.1, Math.abs(dOpac), Math.abs(dRefl), Math.abs(dPool));
-    });
-
-    return motion;
-}
-
-function updateLabels() {
-    const tempVec = new THREE.Vector3();
-
-    panelGroups.forEach((group, i) => {
-        tempVec.set(0, PANEL_SIZE / 2 + 0.4, 0);
-        group.localToWorld(tempVec);
-        tempVec.project(camera);
-
-        const x = (tempVec.x * 0.5 + 0.5) * window.innerWidth;
-        const y = (-tempVec.y * 0.5 + 0.5) * window.innerHeight;
-
-        // transform-only positioning keeps these on the compositor (no layout reflow)
-        labels[i].style.transform = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
-
-        const dist = Math.abs(i - currentIndex);
-        const cls = dist < 0.5 ? 'panel-label active'
-                  : dist < 2.5 ? 'panel-label visible'
-                  : 'panel-label';
-        if (labels[i].className !== cls) labels[i].className = cls;
-    });
-}
-
-function navigate(dir) {
-    targetIndex = Math.max(0, Math.min(N - 1, targetIndex + dir));
-    const hint = document.getElementById('navHint');
-    if (hint) hint.style.opacity = '0';
-    wake();
-}
-
-window.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    scrollAccum += e.deltaY;
-    if (Math.abs(scrollAccum) > 50) {
-        navigate(scrollAccum > 0 ? 1 : -1);
-        scrollAccum = 0;
-    }
-}, { passive: false });
-
-window.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
-});
-
-let touchStartX = 0;
-window.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
-window.addEventListener('touchend', (e) => {
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    if (Math.abs(dx) > 40) navigate(dx < 0 ? 1 : -1);
-});
-
-// throttled to ~33 Hz — the parallax/hover is smoothed in the render loop, so
-// sampling the pointer more often than that is wasted work
-let lastMove = 0;
-window.addEventListener('mousemove', (e) => {
-    const now = performance.now();
-    if (now - lastMove < 30) return;
-    lastMove = now;
-    mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    pointer.set(mouseNDC.x, mouseNDC.y);
-    pointerDirty = true;
-    wake();
-}, { passive: true });
-
-window.addEventListener('click', (e) => {
-    if (e.target.tagName === 'A') return;
-    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(panelMeshes);
-    if (hits.length > 0) {
-        const idx = hits[0].object.userData.index;
-        if (Math.abs(idx - targetIndex) < 0.5) {
-            const num = String(idx + 1).padStart(2, '0');
-            window.location.hash = '#capitulo-' + num;
-        } else {
-            targetIndex = idx;
-        }
-        const hint = document.getElementById('navHint');
-        if (hint) hint.style.opacity = '0';
-    }
-    wake();
-});
-
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    composer.setSize(window.innerWidth, window.innerHeight);
-    wake();
-});
-
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-        lastTime = performance.now();
-        lastFrame = 0;
-        wake();
-    }
-});
-
-let lastTime = performance.now();
-
-function animate(time) {
-    requestAnimationFrame(animate);
-
-    // Pause entirely when the tab isn't visible.
-    if (document.hidden) return;
-
-    // Cap the work to ~30fps. The rAF callback still fires at the display rate,
-    // but we only run the simulation/render on frames past the interval.
-    if (time - lastFrame < FRAME_MS - 1) return;
-
-    // Fully settled: nothing is moving and the pointer is parked. Skip the
-    // expensive render entirely until the next interaction calls wake().
-    if (idle) return;
-
-    lastFrame = time;
-    const dt = Math.min((time - lastTime) / 1000, 0.05);
-    lastTime = time;
-
-    smoothMouse.x += (mouseNDC.x - smoothMouse.x) * 2 * dt;
-    smoothMouse.y += (mouseNDC.y - smoothMouse.y) * 2 * dt;
-
-    camera.position.x = smoothMouse.x * 0.5;
-    camera.position.y = 1.8 + smoothMouse.y * 0.3;
-    camera.lookAt(0, 0.6, 0);
-
-    // Raycast only when the pointer moved or panels are still sliding —
-    // a stationary cursor over a settled scene can't change what's hovered.
-    if (pointerDirty || Math.abs(targetIndex - currentIndex) > 0.001) {
-        raycaster.setFromCamera(pointer, camera);
-        const hits = raycaster.intersectObjects(panelMeshes);
-        hoveredIndex = hits.length > 0 ? hits[0].object.userData.index : -1;
-        renderer.domElement.style.cursor = hoveredIndex >= 0 ? 'pointer' : 'default';
-        pointerDirty = false;
-    }
-
-    const motion = updateCarousel(dt);
-    updateLabels();
-    composer.render();
-
-    // Decide whether the scene has come to rest this frame.
-    const mouseSettled = Math.abs(mouseNDC.x - smoothMouse.x) < 0.0015 &&
-                         Math.abs(mouseNDC.y - smoothMouse.y) < 0.0015;
-    if (motion < 0.0008 && mouseSettled && currentIndex === targetIndex && hoveredIndex === prevHovered) {
-        idle = true;
-    }
-    prevHovered = hoveredIndex;
-}
-
-function handleRoute() {
-    const hash = window.location.hash;
-    const homepage = document.getElementById('homepage');
-    const container = document.getElementById('chapter-container');
-
-    if (!hash || hash === '#' || hash === '#home') {
-        homepage.style.display = 'block';
-        container.style.display = 'none';
-        container.innerHTML = '';
-    } else if (hash.startsWith('#capitulo-')) {
-        homepage.style.display = 'none';
-        container.style.display = 'block';
-        const num = hash.replace('#capitulo-', '');
-        const chapterMap = {
-            '01': 'cap-01-focus.html',
-            '02': 'cap-02-path.html',
-            '03': 'cap-03-adaptability.html',
-            '04': 'cap-04.html',
-            '05': 'cap-05.html',
-            '06': 'cap-06.html',
-            '07': 'cap-07.html',
-            '08': 'cap-08.html',
-            '09': 'cap-09.html',
-            '10': 'cap-10.html',
-        };
-        const file = chapterMap[num];
-        if (file) {
-            fetch(file)
-                .then(r => {
-                    if (!r.ok) throw new Error('Not found');
-                    return r.text();
-                })
-                .then(html => {
-                    container.innerHTML = html;
-                    // innerHTML does not execute <script> tags — re-create them
-                    // so each chapter can run its own interaction logic.
-                    container.querySelectorAll('script').forEach(old => {
-                        const s = document.createElement('script');
-                        for (const a of old.attributes) s.setAttribute(a.name, a.value);
-                        s.textContent = old.textContent;
-                        old.replaceWith(s);
-                    });
-                })
-                .catch(() => {
-                    container.innerHTML = `
-                        <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Inter,sans-serif;">
-                            <div style="text-align:center;">
-                                <p style="font-size:14px;font-weight:200;letter-spacing:0.2em;color:rgba(0,0,0,0.3);margin-bottom:20px;">CHAPTER ${num}</p>
-                                <p style="font-size:12px;font-weight:300;color:rgba(0,0,0,0.2);">Coming soon</p>
-                                <a href="#home" style="display:inline-block;margin-top:30px;font-size:11px;font-weight:300;letter-spacing:0.15em;color:rgba(0,0,0,0.25);text-decoration:none;border-bottom:1px solid rgba(0,0,0,0.1);padding-bottom:2px;">BACK</a>
-                            </div>
-                        </div>
-                    `;
-                });
-        }
-    }
-}
-
-window.addEventListener('hashchange', handleRoute);
-handleRoute();
-requestAnimationFrame(animate);
-
+  }
+  toggle.addEventListener('click', () => {
+    rootEl.classList.toggle('dark');
+    localStorage.setItem('beLight.theme', rootEl.classList.contains('dark') ? 'dark' : 'light');
+    syncToggle();
+    applyGuideForTheme();
+  });
+  syncToggle();
+  applyGuideForTheme();
 </script>
+
+<script src="router.js"></script>
 
 </body>
 </html>

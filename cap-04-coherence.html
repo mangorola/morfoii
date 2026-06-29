@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 — COHERENCE</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@200..600&family=Space+Mono:ital,wght@0,400;1,400&display=swap');
+
+    :root {
+        /* themed tokens — overridden by [data-theme] below */
+        --bg-top:    #ffffff;
+        --bg-mid:    #ffe9dd;
+        --bg-bot:    #ffd2e1;
+        --ink:       rgba(40, 28, 34, 0.78);
+        --ink-soft:  rgba(40, 28, 34, 0.42);
+        --ink-faint: rgba(40, 28, 34, 0.22);
+    }
+    [data-theme="dark"] {
+        --bg-top:    #1b1512;
+        --bg-mid:    #221715;
+        --bg-bot:    #2c1a1e;
+        --ink:       rgba(255, 238, 232, 0.82);
+        --ink-soft:  rgba(255, 238, 232, 0.42);
+        --ink-faint: rgba(255, 238, 232, 0.22);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+        font-family: 'Space Grotesk', sans-serif;
+        /* atmospheric gradient lives in the DOM; the WebGL canvas is transparent
+           and composites over it, so only the cubes ever bloom. */
+        background:
+            radial-gradient(140% 120% at 70% 8%, var(--bg-top) 0%, var(--bg-mid) 42%, var(--bg-bot) 100%);
+        transition: background 0.9s ease;
+    }
+    canvas { display: block; position: fixed; inset: 0; }
+
+    /* ---- overlay (pure HTML/CSS, never blocks the canvas) ---- */
+    .overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;   /* canvas stays interactive underneath */
+        z-index: 5;
+        color: var(--ink);
+    }
+
+    .chapter-mark {
+        position: fixed;
+        top: clamp(22px, 4vh, 46px);
+        left: clamp(24px, 4vw, 60px);
+    }
+    .chapter-num {
+        font-family: 'Space Mono', monospace;
+        font-size: clamp(11px, 1vw, 13px);
+        letter-spacing: 0.3em;
+        color: var(--ink-soft);
+    }
+    .chapter-name {
+        font-size: clamp(28px, 4.4vw, 64px);
+        font-weight: 300;
+        letter-spacing: 0.16em;
+        line-height: 1;
+        margin-top: 0.35em;
+        color: var(--ink);
+    }
+
+    .principle {
+        position: fixed;
+        bottom: clamp(26px, 5vh, 58px);
+        left: clamp(24px, 4vw, 60px);
+        max-width: min(440px, 70vw);
+        font-size: clamp(12px, 1.1vw, 15px);
+        font-weight: 300;
+        line-height: 1.7;
+        letter-spacing: 0.02em;
+        color: var(--ink-soft);
+    }
+    .principle em {
+        font-style: normal;
+        color: var(--ink);
+    }
+
+    /* discreet typographic theme toggle — not a button chrome */
+    .theme-toggle {
+        position: fixed;
+        top: clamp(22px, 4vh, 46px);
+        right: clamp(24px, 4vw, 60px);
+        pointer-events: auto;
+        display: flex;
+        gap: 0.55em;
+        align-items: center;
+        font-family: 'Space Mono', monospace;
+        font-size: clamp(10px, 0.85vw, 12px);
+        letter-spacing: 0.22em;
+        cursor: pointer;
+        user-select: none;
+    }
+    .theme-toggle span {
+        color: var(--ink-faint);
+        transition: color 0.5s ease;
+    }
+    .theme-toggle span.on { color: var(--ink); }
+    .theme-toggle .sep { color: var(--ink-faint); }
+
+    .back-index {
+        position: fixed;
+        bottom: clamp(26px, 5vh, 58px);
+        right: clamp(24px, 4vw, 60px);
+        pointer-events: auto;
+        font-family: 'Space Mono', monospace;
+        font-size: clamp(10px, 0.85vw, 12px);
+        letter-spacing: 0.2em;
+        text-decoration: none;
+        color: var(--ink-soft);
+        border-bottom: 1px solid var(--ink-faint);
+        padding-bottom: 3px;
+        transition: color 0.4s ease, border-color 0.4s ease;
+    }
+    .back-index:hover { color: var(--ink); border-color: var(--ink-soft); }
+
+    /* faint outline of the central hover zone — only shown while tuning
+       (CONFIG.showZone). Invisible by default; the user discovers the zone
+       through the cubes' reaction, not a drawn border. */
+    .zone-debug {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        border: 1px dashed var(--ink-faint);
+        border-radius: 6px;
+        pointer-events: none;
+        z-index: 6;
+        display: none;
+    }
+
+    @media (max-width: 600px) {
+        .principle { max-width: 84vw; }
+    }
+</style>
+</head>
+<body>
+
+<div class="overlay">
+    <div class="chapter-mark">
+        <div class="chapter-num">04</div>
+        <div class="chapter-name">COHERENCE</div>
+    </div>
+
+    <p class="principle">
+        Alone, a point of light is only a point.
+        <em>In phase with others, it becomes direction.</em>
+    </p>
+
+    <div class="theme-toggle" id="themeToggle" title="Toggle theme">
+        <span id="lblLight" class="on">LIGHT</span>
+        <span class="sep">/</span>
+        <span id="lblDark">DARK</span>
+    </div>
+
+    <a class="back-index" id="backIndex" href="#home">← INDEX</a>
+</div>
+
+<div class="zone-debug" id="zoneDebug"></div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ====================================================================
+   CONFIG — tune the feel here
+   ==================================================================== */
+const CONFIG = {
+    /* ---- the eroded voxel body ---- */
+    gridX: 14, gridY: 10, gridZ: 12,  // 14×10×12 = 1680 grid capacity (one instance per cell)
+    cellSpacing:  1.0,    // distance between adjacent cell centres
+    cubeSize:     0.9,    // cube edge (slightly < spacing → crisp voxel gaps / aligned edges)
+    bobAmplitude: 0.045,  // VERY subtle breathing so order dominates over motion
+
+    /* ---- skyline erosion: each (x,z) column is filled from the floor up to a
+       random height, so the rest state is an uneven skyline of towers + gaps,
+       NOT a solid block. Re-rolled every time the body reassembles. ---- */
+    colMinHeight:      0.12,  // shortest column as a fraction of gridY (some near-empty)
+    colMaxHeight:      1.0,   // tallest column as a fraction of gridY (full height)
+    neighborCoherence: 0.3,   // 0 = pure noise; →1 = columns match neighbours (smoother skyline)
+
+    /* ---- true-isometric orthographic camera ---- */
+    viewSize:      38,    // world-height of the ortho frustum; LARGER ⇒ brick reads SMALLER
+    fieldRotation: 0.22,  // radians the whole brick leans toward the mouse (ortho has no parallax)
+
+    bloomStrength: 0.62,  // atmosphere (kept modest for perf)
+
+    /* central hover zone — a centred rectangle, sized as a fraction of the
+       viewport. Entering disperses the brick; leaving collides it back. */
+    zoneWidth:   0.30,   // fraction of viewport width
+    zoneHeight:  0.34,   // fraction of viewport height
+    showZone:    false,  // draw a faint outline of the zone while tuning
+
+    /* collide ⇄ disperse — ONE shared centre; the body inflates, never splits */
+    dispersionExpand: 2.45,   // how far the body inflates outward when dispersed (× each cube's offset)
+    expandVariation:  0.35,   // per-cube spread on that expansion (0 = uniform scale; > 0 = organic)
+    transitionSpeed:  0.29,    // lerp rate collided⇄dispersed (per sec)
+
+    /* colour toggle — the whole field is ONE of these at a time */
+    colorBlue:           '#006BD6',  // electric blue
+    colorRed:            '#D60E00',  // vivid red
+    colorLerpSpeed:      1.7,        // seconds for a cube's colour to cross over
+    colorWavefrontSpeed: 10,         // world units/sec the colour sweep travels
+
+    /* colour-change spin — a quick flip impulse rippling with the colour wave */
+    spinStrength: 2.6,    // radians at the peak of the flip impulse
+    spinDecay:    0.42,   // seconds to peak / settle timescale of the impulse
+};
+
+/* The brick sits at the world origin. The InstancedMesh is centred on its own
+   centroid, so it can lean (rotate) toward the mouse around its middle. */
+const FIELD_CENTER = { x: 0, y: 0, z: 0 };
+
+const smoothstep = (e0, e1, x) => {
+    const u = THREE.MathUtils.clamp((x - e0) / (e1 - e0), 0, 1);
+    return u * u * (3 - 2 * u);
+};
+
+/* ---- reusable scratch objects (NEVER allocate inside the frame loop) ---- */
+const _matrix = new THREE.Matrix4();
+const _pos    = new THREE.Vector3();
+const _scale  = new THREE.Vector3();
+const _quat   = new THREE.Quaternion();
+const _axis   = new THREE.Vector3();
+const _color  = new THREE.Color();
+const _ray    = new THREE.Raycaster();
+const _ndc    = new THREE.Vector2();
+const _click  = new THREE.Vector3();           // last click point in world space
+const _clickPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -FIELD_CENTER.z);
+
+/* ====================================================================
+   RENDERER / SCENE / CAMERA
+   ==================================================================== */
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000000, 0.012);
+
+/* Themed background as an opaque vertical gradient texture. (Transparent clear
+   under EffectComposer fills opaque, so the gradient must live in the scene's
+   clear, not in CSS.) Built once per theme, swapped in applyThemeToScene. */
+function makeGradient(stops) {
+    const cnv = document.createElement('canvas');
+    cnv.width = 4; cnv.height = 512;
+    const ctx = cnv.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, 0, 512);
+    stops.forEach(([o, c]) => g.addColorStop(o, c));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 4, 512);
+    const tex = new THREE.CanvasTexture(cnv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+const gradLight = makeGradient([
+    [0.0, '#fff7f4'], [0.45, '#ffe6d8'], [1.0, '#ffd2e2'],
+]);
+const gradDark = makeGradient([
+    [0.0, '#161210'], [0.5, '#1f1715'], [1.0, '#2a191d'],
+]);
+
+/* True isometric: look down ~35.264°, azimuth 45° — i.e. the (1,1,1) direction.
+   Orthographic ⇒ parallel edges stay parallel (clean voxel look, no vanishing
+   point). viewSize fixes the world-height of the frustum so the brick reads at a
+   constant size; the frustum is recomputed from aspect so it never stretches. */
+function isoFrustum(cam, aspect) {
+    const vs = CONFIG.viewSize;
+    cam.left   = -vs * aspect / 2;
+    cam.right  =  vs * aspect / 2;
+    cam.top    =  vs / 2;
+    cam.bottom = -vs / 2;
+    cam.updateProjectionMatrix();
+}
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
+isoFrustum(camera, window.innerWidth / window.innerHeight);
+const ISO_DIST = 40;   // distance back along (1,1,1); ortho scale is set by viewSize, not this
+camera.position.set(1, 1, 1).normalize().multiplyScalar(ISO_DIST);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+/* ---- post: render + modest bloom ---- */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    CONFIG.bloomStrength, 0.6, 0.5   // strength, radius, threshold
+);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
+
+/* ---- lights (soft, no hard shadows) ---- */
+const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+scene.add(ambient);
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+keyLight.position.set(6, 9, 8);
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0xffd9c2, 0.35);
+fillLight.position.set(-7, -3, 4);
+scene.add(fillLight);
+
+/* ====================================================================
+   THE BRICK — single InstancedMesh, per-instance matrix + color
+   ====================================================================
+   One body, one shared centre. Every cube keeps a fixed lattice offset from
+   that centre (its identity). A live per-cube expansion factor scales it:
+     • COLLIDED (factor → 1)         — the tidy ordered 14×10×12 brick
+     • DISPERSED (factor → expandTgt) — the SAME body inflated outward, so it
+       loosens uniformly and turns porous without any cube migrating away.
+   The factor eases between the two each frame, so it's always smooth. */
+const N = CONFIG.gridX * CONFIG.gridY * CONFIG.gridZ;   // 14×10×12 = 1680
+const geometry = new THREE.BoxGeometry(1, 1, 1);
+const material = new THREE.MeshStandardMaterial({
+    roughness: 0.45,
+    metalness: 0.0,
+});
+const field = new THREE.InstancedMesh(geometry, material, N);
+field.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+field.position.set(FIELD_CENTER.x, FIELD_CENTER.y, FIELD_CENTER.z);
+scene.add(field);
+
+/* ---- per-instance state (parallel arrays — no per-cube objects) ---- */
+const baseOX = new Float32Array(N);   // cube's fixed offset from the shared centre (its identity)
+const baseOY = new Float32Array(N);
+const baseOZ = new Float32Array(N);
+const expandTgt = new Float32Array(N);// per-cube dispersed expansion factor (varied → organic)
+const curExp = new Float32Array(N);   // live expansion: 1 = collided, expandTgt = dispersed
+const curX = new Float32Array(N);     // live world position (for the click wavefront distance)
+const curY = new Float32Array(N);
+const curZ = new Float32Array(N);
+
+const phase      = new Float32Array(N);    // per-instance phase (the breathing shimmer)
+const freqA      = new Float32Array(N);
+const ampScale   = new Float32Array(N);
+const rotAxisX   = new Float32Array(N);    // random axis for the colour-change flip
+const rotAxisY   = new Float32Array(N);
+const rotAxisZ   = new Float32Array(N);
+const lightDelta = new Float32Array(N);    // per-cube lightness jitter on the single hue
+const visTgt     = new Float32Array(N);    // 1 = cell filled in current skyline, 0 = eroded away
+const visCur     = new Float32Array(N);    // live visibility (scale multiplier), lerps toward visTgt
+
+const colFrm     = new Float32Array(N * 3);// colour at click time (lerp source)
+const colTgt     = new Float32Array(N * 3);// colour after the wave passes (lerp target)
+const colorStart = new Float32Array(N).fill(-1e9); // when the colour wave reaches cube i
+const spinStart  = new Float32Array(N).fill(-1e9); // when the flip impulse fires for cube i
+
+const baseHSL = { h: 0, s: 0, l: 0 };
+
+/* Build the ordered 14×10×12 lattice. Each instance maps to ONE unique cell —
+   no empties, no leftovers — snapped to integer cells and centred on the brick's
+   own centroid, so it reads as a clean solid voxel block at rest. */
+const gx = CONFIG.gridX, gy = CONFIG.gridY, gz = CONFIG.gridZ, sp = CONFIG.cellSpacing;
+
+for (let i = 0; i < N; i++) {
+    // --- the cube's fixed cell offset from the shared centroid (its identity) ---
+    const ix = i % gx;
+    const iy = Math.floor(i / gx) % gy;
+    const iz = Math.floor(i / (gx * gy));
+    baseOX[i] = (ix - (gx - 1) / 2) * sp;
+    baseOY[i] = (iy - (gy - 1) / 2) * sp;
+    baseOZ[i] = (iz - (gz - 1) / 2) * sp;
+
+    // dispersed = the SAME offset scaled outward (per-cube varied so spacing is organic)
+    expandTgt[i] = CONFIG.dispersionExpand *
+        (1 + (Math.random() * 2 - 1) * CONFIG.expandVariation);
+
+    // start collided (resting state = the tidy brick)
+    curExp[i] = 1;
+    curX[i] = baseOX[i];   // positions are now LOCAL to the InstancedMesh
+    curY[i] = baseOY[i];
+    curZ[i] = baseOZ[i];
+
+    // --- breathing signature (kept tiny so order dominates) ---
+    phase[i]    = Math.random() * Math.PI * 2;
+    freqA[i]    = 0.35 + Math.random() * 0.35;
+    ampScale[i] = 0.55 + Math.random() * 0.9;
+
+    // random axis for the colour-change flip impulse
+    _axis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+    rotAxisX[i] = _axis.x; rotAxisY[i] = _axis.y; rotAxisZ[i] = _axis.z;
+
+    // --- colour: the single field hue (blue at start) + a little lightness jitter ---
+    lightDelta[i] = (Math.random() - 0.5) * 0.12;
+    _color.set(CONFIG.colorBlue).getHSL(baseHSL);
+    _color.setHSL(baseHSL.h, baseHSL.s,
+        THREE.MathUtils.clamp(baseHSL.l + lightDelta[i], 0.3, 0.8));
+    field.setColorAt(i, _color);
+}
+field.instanceColor.needsUpdate = true;
+
+/* ---- skyline erosion -------------------------------------------------------
+   Carve the solid grid into uneven towers: each (x,z) column gets a random
+   height and is filled from the floor (y=0) up to it; cells above are empty and
+   their instances hide (scale → 0). Re-rolled on every reassembly, so the
+   silhouette is never the same twice. The InstancedMesh stays at full capacity;
+   only per-instance visibility changes — no allocation, no stray cubes. */
+const COLS = gx * gz;
+const colHeight = new Float32Array(COLS);   // filled-cell count per (x,z) column
+const colRaw    = new Float32Array(COLS);   // scratch: raw heights before neighbour smoothing
+
+function rollSkyline() {
+    const minH = CONFIG.colMinHeight * gy;
+    const maxH = CONFIG.colMaxHeight * gy;
+    for (let c = 0; c < COLS; c++) colRaw[c] = minH + Math.random() * (maxH - minH);
+
+    // blend each column toward its 4-neighbour average so towers cohere a little
+    // (reads as a structure, not pure noise) while keeping clear height contrast
+    const k = CONFIG.neighborCoherence;
+    for (let zc = 0; zc < gz; zc++) {
+        for (let xc = 0; xc < gx; xc++) {
+            const c = xc + zc * gx;
+            let sum = 0, n = 0;
+            if (xc > 0)      { sum += colRaw[c - 1];  n++; }
+            if (xc < gx - 1) { sum += colRaw[c + 1];  n++; }
+            if (zc > 0)      { sum += colRaw[c - gx]; n++; }
+            if (zc < gz - 1) { sum += colRaw[c + gx]; n++; }
+            const avg = n ? sum / n : colRaw[c];
+            const h = colRaw[c] * (1 - k) + avg * k;
+            colHeight[c] = THREE.MathUtils.clamp(Math.round(h), 0, gy);
+        }
+    }
+
+    // map column heights → per-instance target visibility (filled below the top)
+    for (let i = 0; i < N; i++) {
+        const iy  = Math.floor(i / gx) % gy;
+        const col = (i % gx) + Math.floor(i / (gx * gy)) * gx;
+        visTgt[i] = iy < colHeight[col] ? 1 : 0;
+    }
+}
+
+rollSkyline();
+visCur.set(visTgt);   // show the first skyline immediately (no grow-in at load)
+
+/* ====================================================================
+   INTERACTION STATE
+   ==================================================================== */
+const colCur = field.instanceColor.array;   // live colour buffer (lerp destination)
+
+let inZone        = false;   // is the pointer inside the central hover zone?
+let colorIsBlue   = true;    // which fixed colour the field currently holds
+let colorUntil    = -1e9;    // skip colour writes after this time
+let spinUntil     = -1e9;    // skip spin maths after this time
+
+/* Write cube i's target colour (a fixed hue + its lightness jitter) into colTgt. */
+function writeTargetColor(i, hex) {
+    _color.set(hex).getHSL(baseHSL);
+    _color.setHSL(baseHSL.h, baseHSL.s,
+        THREE.MathUtils.clamp(baseHSL.l + lightDelta[i], 0.3, 0.8));
+    const o = i * 3;
+    colTgt[o] = _color.r; colTgt[o + 1] = _color.g; colTgt[o + 2] = _color.b;
+}
+
+/* ====================================================================
+   THEME  (light default, persisted in localStorage)
+   ==================================================================== */
+const THEME_KEY = 'belight-theme';
+let isDark = false;
+
+function applyThemeToScene(dark) {
+    // background, scene clear, cube material + lighting response to theme
+    if (dark) {
+        scene.background    = gradDark;
+        ambient.intensity   = 0.5;
+        keyLight.intensity  = 0.95;
+        fillLight.intensity = 0.45;
+        material.roughness  = 0.4;
+        scene.fog.color.set(0x241a1c);
+        scene.fog.density   = 0.013;
+        // on charcoal, glow can be generous and catch dimmer cubes
+        bloomPass.strength  = CONFIG.bloomStrength * 1.25;
+        bloomPass.radius    = 0.6;
+        bloomPass.threshold = 0.45;
+    } else {
+        scene.background    = gradLight;
+        ambient.intensity   = 0.55;     // lower ambient → cubes keep shading + colour
+        keyLight.intensity  = 1.35;
+        fillLight.intensity = 0.3;
+        material.roughness  = 0.5;
+        scene.fog.color.set(0xffe2d8);
+        scene.fog.density   = 0.009;
+        // on a bright field, bloom must stay tight or it washes the cubes out
+        bloomPass.strength  = CONFIG.bloomStrength * 0.5;
+        bloomPass.radius    = 0.45;
+        bloomPass.threshold = 0.82;
+    }
+}
+
+function setTheme(dark, persist = true) {
+    isDark = dark;
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    document.getElementById('lblLight').classList.toggle('on', !dark);
+    document.getElementById('lblDark').classList.toggle('on', dark);
+    applyThemeToScene(dark);
+    if (persist) {
+        try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) {}
+    }
+}
+
+(function initTheme() {
+    let stored = null;
+    try { stored = localStorage.getItem(THEME_KEY); } catch (e) {}
+    setTheme(stored === 'dark', false);   // default light
+})();
+
+document.getElementById('themeToggle').addEventListener('click', () => setTheme(!isDark));
+
+/* back-to-index: never a full reload — just a hash change on the host page */
+document.getElementById('backIndex').addEventListener('click', (e) => {
+    e.preventDefault();
+    (window.parent || window).location.hash = '#home';
+});
+
+/* ====================================================================
+   CENTRAL HOVER ZONE  (invisible; optional debug outline)
+   ==================================================================== */
+const zoneDebug = document.getElementById('zoneDebug');
+function layoutZoneDebug() {
+    if (!CONFIG.showZone) { zoneDebug.style.display = 'none'; return; }
+    zoneDebug.style.display = 'block';
+    zoneDebug.style.width  = (CONFIG.zoneWidth  * 100) + 'vw';
+    zoneDebug.style.height = (CONFIG.zoneHeight * 100) + 'vh';
+}
+layoutZoneDebug();
+
+function testZone(clientX, clientY) {
+    const halfW = CONFIG.zoneWidth  * window.innerWidth  * 0.5;
+    const halfH = CONFIG.zoneHeight * window.innerHeight * 0.5;
+    return Math.abs(clientX - window.innerWidth  * 0.5) < halfW &&
+           Math.abs(clientY - window.innerHeight * 0.5) < halfH;
+}
+
+/* ====================================================================
+   INPUT — mouse parallax + zone hover test
+   ==================================================================== */
+const mouse = { x: 0, y: 0 };
+window.addEventListener('mousemove', (e) => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    const nowIn = testZone(e.clientX, e.clientY);
+    if (inZone && !nowIn) rollSkyline();   // leaving the zone → reassemble as a NEW skyline
+    inZone = nowIn;
+}, { passive: true });
+
+// leaving the window pulls the body back together — also as a fresh skyline
+window.addEventListener('mouseleave', () => {
+    if (inZone) rollSkyline();
+    inZone = false;
+}, { passive: true });
+
+/* A click toggles the whole field between blue and red. The new colour sweeps
+   outward from the click point as a wavefront; each cube performs a brief spin
+   impulse as the wave reaches it, so the field flips in a ripple, not at once. */
+renderer.domElement.addEventListener('click', (e) => {
+    _ndc.set(
+        (e.clientX / window.innerWidth) * 2 - 1,
+        -(e.clientY / window.innerHeight) * 2 + 1
+    );
+    _ray.setFromCamera(_ndc, camera);
+    if (!_ray.ray.intersectPlane(_clickPlane, _click)) return;
+    field.worldToLocal(_click);   // wavefront origin in the brick's own (local) space
+
+    colorIsBlue = !colorIsBlue;
+    const hex = colorIsBlue ? CONFIG.colorBlue : CONFIG.colorRed;
+    const clickT = elapsed;
+    let maxDelay = 0;
+
+    for (let i = 0; i < N; i++) {
+        // colour wavefront delay from the click point (uses live position)
+        const dx = curX[i] - _click.x;
+        const dy = curY[i] - _click.y;
+        const dz = curZ[i] - _click.z;
+        const delay = Math.sqrt(dx * dx + dy * dy + dz * dz) / CONFIG.colorWavefrontSpeed;
+        if (delay > maxDelay) maxDelay = delay;
+
+        colorStart[i] = clickT + delay;   // colour + spin both keyed to arrival
+        spinStart[i]  = clickT + delay;
+
+        // remember current colour, compute the target colour
+        const o = i * 3;
+        colFrm[o] = colCur[o]; colFrm[o + 1] = colCur[o + 1]; colFrm[o + 2] = colCur[o + 2];
+        writeTargetColor(i, hex);
+    }
+
+    colorUntil = clickT + maxDelay + CONFIG.colorLerpSpeed + 0.1;
+    spinUntil  = clickT + maxDelay + CONFIG.spinDecay * 7;   // let the impulse fully settle
+});
+
+/* ====================================================================
+   RESIZE
+   ==================================================================== */
+window.addEventListener('resize', () => {
+    // recompute the ortho frustum from aspect so the brick never stretches and
+    // the margins around it stay balanced
+    isoFrustum(camera, window.innerWidth / window.innerHeight);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    bloomPass.setSize(window.innerWidth, window.innerHeight);
+    layoutZoneDebug();
+});
+
+/* ====================================================================
+   ANIMATE
+   ==================================================================== */
+const clock = new THREE.Clock();
+let elapsed = 0;
+
+function animate() {
+    requestAnimationFrame(animate);
+    if (document.hidden) return;
+
+    const dt = Math.min(clock.getDelta(), 0.05);
+    elapsed += dt;
+    const t = elapsed;
+
+    /* --- ortho has no parallax, so give the brick life by leaning the whole
+           body toward the mouse, plus a slow autonomous angular drift --- */
+    const leanTargetX = -mouse.y * CONFIG.fieldRotation + Math.sin(t * 0.07) * 0.05;
+    const leanTargetY =  mouse.x * CONFIG.fieldRotation + Math.sin(t * 0.05) * 0.06;
+    const leanLerp = Math.min(1, 2.2 * dt);
+    field.rotation.x += (leanTargetX - field.rotation.x) * leanLerp;
+    field.rotation.y += (leanTargetY - field.rotation.y) * leanLerp;
+
+    const posLerp     = Math.min(1, CONFIG.transitionSpeed * dt);
+    const globalBob   = CONFIG.bobAmplitude * Math.sin(t * 0.5);   // shared breathing keeps order
+    const colorActive = t < colorUntil;
+    const spinActive  = t < spinUntil;
+    let   colorDirty  = false;
+
+    /* --- per-instance: ease toward collide/disperse target + gentle bob --- */
+    for (let i = 0; i < N; i++) {
+        // ease the expansion factor toward collided (1) or dispersed (expandTgt)
+        const expTarget = inZone ? expandTgt[i] : 1;
+        curExp[i] += (expTarget - curExp[i]) * posLerp;
+
+        // local position = the cube's own offset scaled outward from the shared
+        // centre. Direction/identity is preserved, so the body inflates uniformly
+        // and never splits into islands. (The InstancedMesh itself carries the lean.)
+        const e = curExp[i];
+        curX[i] = baseOX[i] * e;
+        curY[i] = baseOY[i] * e;
+        curZ[i] = baseOZ[i] * e;
+
+        const ph = phase[i];
+        // VERY subtle breathing: a shared bob keeps the brick coherent, plus a
+        // whisper of per-cube shimmer so it stays alive without losing its order.
+        const bob = globalBob +
+            CONFIG.bobAmplitude * 0.3 * ampScale[i] * Math.sin(t * freqA[i] + ph);
+
+        _pos.set(curX[i], curY[i] + bob, curZ[i]);
+
+        // at rest the cube is axis-aligned (crisp brick edges); a decaying flip
+        // impulse spins it as the colour wavefront arrives, then it settles back.
+        let angle = 0;
+        if (spinActive) {
+            const tau = t - spinStart[i];
+            if (tau >= 0) {
+                // impulse response: rises to a peak at tau=spinDecay, then eases out
+                const k = tau / CONFIG.spinDecay;
+                angle = CONFIG.spinStrength * k * Math.exp(1 - k);
+            }
+        }
+        _axis.set(rotAxisX[i], rotAxisY[i], rotAxisZ[i]);
+        _quat.setFromAxisAngle(_axis, angle);
+
+        // visibility: eroded (empty) cells shrink to nothing, filled cells grow
+        // in — so a re-rolled skyline reshapes smoothly with no popping
+        visCur[i] += (visTgt[i] - visCur[i]) * posLerp;
+        const s = CONFIG.cubeSize * visCur[i];
+        _scale.set(s, s, s);
+
+        _matrix.compose(_pos, _quat, _scale);
+        field.setMatrixAt(i, _matrix);
+
+        // colour wavefront: lerp this cube from its old colour to the new target
+        if (colorActive) {
+            const cp = smoothstep(colorStart[i], colorStart[i] + CONFIG.colorLerpSpeed, t);
+            const o = i * 3;
+            colCur[o]     = colFrm[o]     + (colTgt[o]     - colFrm[o])     * cp;
+            colCur[o + 1] = colFrm[o + 1] + (colTgt[o + 1] - colFrm[o + 1]) * cp;
+            colCur[o + 2] = colFrm[o + 2] + (colTgt[o + 2] - colFrm[o + 2]) * cp;
+            colorDirty = true;
+        }
+    }
+    field.instanceMatrix.needsUpdate = true;
+    if (colorDirty) field.instanceColor.needsUpdate = true;
+
+    composer.render();
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) clock.getDelta();   // drop the paused gap
+});
+
+animate();
+</script>
+
+</body>
+</html>
