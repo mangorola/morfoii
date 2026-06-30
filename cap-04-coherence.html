@@ -25,7 +25,17 @@
         --ink-faint: rgba(255, 238, 232, 0.22);
     }
 
-    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+        font-family: 'Space Grotesk', sans-serif;
+        /* atmospheric gradient lives in the DOM; the WebGL canvas is transparent
+           and composites over it, so only the cubes ever bloom. */
+        background:
+            radial-gradient(140% 120% at 70% 8%, var(--bg-top) 0%, var(--bg-mid) 42%, var(--bg-bot) 100%);
+        transition: background 0.9s ease;
+    }
+    canvas { display: block; position: fixed; inset: 0; }
 
     /* ---- overlay (pure HTML/CSS, never blocks the canvas) ---- */
     .overlay {
@@ -148,7 +158,7 @@
         <span id="lblDark">DARK</span>
     </div>
 
-    <a class="back-index" id="backIndex" href="#home">← Ind</a>
+    <a class="back-index" id="backIndex" href="#home">← </a>
 </div>
 
 <div class="zone-debug" id="zoneDebug"></div>
