@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>04 — COHERENCE</title>
+<title>04 — ac</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@200..600&family=Space+Mono:ital,wght@0,400;1,400&display=swap');
 
@@ -25,17 +25,7 @@
         --ink-faint: rgba(255, 238, 232, 0.22);
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    body {
-        font-family: 'Space Grotesk', sans-serif;
-        /* atmospheric gradient lives in the DOM; the WebGL canvas is transparent
-           and composites over it, so only the cubes ever bloom. */
-        background:
-            radial-gradient(140% 120% at 70% 8%, var(--bg-top) 0%, var(--bg-mid) 42%, var(--bg-bot) 100%);
-        transition: background 0.9s ease;
-    }
-    canvas { display: block; position: fixed; inset: 0; }
+    
 
     /* ---- overlay (pure HTML/CSS, never blocks the canvas) ---- */
     .overlay {
@@ -145,12 +135,11 @@
 <div class="overlay">
     <div class="chapter-mark">
         <div class="chapter-num">04</div>
-        <div class="chapter-name">COHERENCE</div>
+        <div class="chapter-name"></div>
     </div>
 
     <p class="principle">
-        Alone, a point of light is only a point.
-        <em>In phase with others, it becomes direction.</em>
+        .</em>
     </p>
 
     <div class="theme-toggle" id="themeToggle" title="Toggle theme">
@@ -159,7 +148,7 @@
         <span id="lblDark">DARK</span>
     </div>
 
-    <a class="back-index" id="backIndex" href="#home">← INDEX</a>
+    <a class="back-index" id="backIndex" href="#home">← Ind</a>
 </div>
 
 <div class="zone-debug" id="zoneDebug"></div>
