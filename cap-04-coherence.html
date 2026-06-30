@@ -82,27 +82,25 @@
         color: var(--ink);
     }
 
-    /* discreet typographic theme toggle — not a button chrome */
+    /* discreet typographic theme toggle — single label, matches homepage style */
     .theme-toggle {
         position: fixed;
         top: clamp(22px, 4vh, 46px);
         right: clamp(24px, 4vw, 60px);
         pointer-events: auto;
-        display: flex;
-        gap: 0.55em;
-        align-items: center;
+        background: none;
+        border: none;
+        padding: 0.4rem 0.2rem;
         font-family: 'Space Mono', monospace;
         font-size: clamp(10px, 0.85vw, 12px);
-        letter-spacing: 0.22em;
+        font-weight: 400;
+        letter-spacing: 0.32em;
+        color: var(--ink-soft);
         cursor: pointer;
         user-select: none;
+        transition: color 0.3s ease;
     }
-    .theme-toggle span {
-        color: var(--ink-faint);
-        transition: color 0.5s ease;
-    }
-    .theme-toggle span.on { color: var(--ink); }
-    .theme-toggle .sep { color: var(--ink-faint); }
+    .theme-toggle:hover { color: var(--ink); }
 
     .back-index {
         position: fixed;
@@ -152,11 +150,7 @@
         .</em>
     </p>
 
-    <div class="theme-toggle" id="themeToggle" title="Toggle theme">
-        <span id="lblLight" class="on">LIGHT</span>
-        <span class="sep">/</span>
-        <span id="lblDark">DARK</span>
-    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema">○ LUZ</button>
 
     <a class="back-index" id="backIndex" href="#home">← </a>
 </div>
@@ -474,7 +468,7 @@ function writeTargetColor(i, hex) {
 /* ====================================================================
    THEME  (light default, persisted in localStorage)
    ==================================================================== */
-const THEME_KEY = 'belight-theme';
+const THEME_KEY = 'beLight.theme';
 let isDark = false;
 
 function applyThemeToScene(dark) {
@@ -509,8 +503,7 @@ function applyThemeToScene(dark) {
 function setTheme(dark, persist = true) {
     isDark = dark;
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-    document.getElementById('lblLight').classList.toggle('on', !dark);
-    document.getElementById('lblDark').classList.toggle('on', dark);
+    document.getElementById('themeToggle').textContent = dark ? '● OSC' : '○ LUZ';
     applyThemeToScene(dark);
     if (persist) {
         try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) {}
