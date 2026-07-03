@@ -5,28 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LA VIDA EN COLOR</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@200..500&family=Space+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
 
+  /* Theme variables — --bg / --fg / --fg-dim are read by router.js fallbacks
+     and by chapters; keep the names stable. CONFIG-driven values are injected
+     after this block and override the light defaults. */
   :root {
-    --bg: #f4f4f1;
+    --bg: #F5F5F0;
     --fg: #1a1a1a;
-    --fg-dim: rgba(26, 26, 26, 0.5);
-    --guide: #D9D9D9;
-    --guide-width: 1.73px;
-    --node-fill: #B0B0B0;
+    --fg-dim: rgba(26, 26, 26, 0.45);
+    --line: #D9D9D9;
+    --line-w: 1px;
+    --node-fill: #A0A0A0;
     --node-text: #ffffff;
-    --node-veiled: #ECECEC;
-    --node-veiled-text: #C8C8C8;
+    --node-size: 4.16vw;
+    --veiled-opacity: 0.35;
+    --frame-top: 7.41vh;
+    --frame-bottom: 92.59vh;
+    --tint-fade: 600ms;
   }
   :root.dark {
-    --bg: #0a0a0a;
-    --fg: #f4f4f1;
-    --fg-dim: rgba(244, 244, 241, 0.55);
-    --guide: #2a2a2a;
-    --node-fill: #6e6e6e;
-    --node-text: #f4f4f1;
-    --node-veiled: #1f1f1f;
-    --node-veiled-text: #3a3a3a;
+    --bg: #0D0D0D;
+    --fg: #F5F5F0;
+    --fg-dim: rgba(245, 245, 240, 0.5);
+    --line: #2E2E2E;
+    --node-fill: #7A7A7A;
+    --node-text: #0D0D0D;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -40,460 +44,366 @@
     transition: background 0.45s ease, color 0.45s ease;
   }
 
-  /* Full-bleed stage: SVG fills the entire viewport. No centring container,
-     no fixed canvas — the frame is inset by CONFIG.margin from the REAL
-     viewport edges, and the geometry is recomputed on every resize. */
-  #homepage {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-  }
+  #homepage { position: relative; width: 100vw; height: 100vh; }
   #chapter-container {
     display: none;
-    width: 100vw;
-    height: 100vh;
     position: absolute;
     inset: 0;
+    width: 100vw;
+    height: 100vh;
   }
 
-  .board {
+  /* === Geometry layer — one full-viewport SVG ============================ */
+  /* No viewBox: 1 SVG unit = 1 CSS px, so percentage attributes resolve as
+     vw (x-axis) / vh (y-axis) and stroke widths stay in fixed pixels. */
+  #board {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
     display: block;
-    width: 100vw;
-    height: 100vh;
-    position: absolute;
-    inset: 0;
   }
 
-  /* === Title ============================================================= */
-  .title {
-    font-family: 'Space Mono', monospace;
-    font-weight: 400;
-    letter-spacing: 0.32em;
-    fill: var(--fg-dim);
-    text-anchor: middle;
-    dominant-baseline: middle;
-    user-select: none;
-    transition: fill 0.45s ease;
-  }
-
-  /* === Guide grid (frame + subtle internal verticals/horizontals) ======== */
-  .guide-frame {
+  #board .guide,
+  #board .frame,
+  #board .circle {
     fill: none;
-    stroke: var(--guide);
-    stroke-width: var(--guide-width);
-    vector-effect: non-scaling-stroke;
-    transition: stroke 0.45s ease;
-    pointer-events: none;
-  }
-  .guide-internal {
-    fill: none;
-    stroke: var(--guide);
-    stroke-width: var(--guide-internal-width);
-    vector-effect: non-scaling-stroke;
-    transition: stroke 0.45s ease;
-    pointer-events: none;
-  }
-
-  /* Background mask behind the titles — hides the frame line under the text. */
-  .title-bg {
-    fill: var(--bg);
-    stroke: none;
-    pointer-events: none;
-    transition: fill 0.45s ease;
-  }
-
-  /* === Circles ============================================================ */
-  .circle-outline {
-    fill: none;
-    stroke: var(--guide);
-    stroke-width: var(--guide-width);
-    vector-effect: non-scaling-stroke;
+    stroke: var(--line);
+    stroke-width: var(--line-w);
     pointer-events: none;
     transition: stroke 0.45s ease;
   }
 
-  /* RGB tint fills — additive screen blend; opacity drives the hover hook. */
-  .circle-tint {
+  /* Additive RGB hover tints — isolated group so the circles screen-blend
+     with EACH OTHER (overlaps trend toward white) before compositing onto
+     the page background. Opacity is driven from CONFIG via JS. */
+  #board .tints { isolation: isolate; }
+  #board .tint {
     mix-blend-mode: screen;
-    transition: fill-opacity 0.7s ease;
     pointer-events: none;
+    transition: fill-opacity var(--tint-fade) ease;
   }
 
-  /* Invisible hover targets — sit under the nodes so node clicks win */
-  .circle-hit {
+  /* Invisible hover targets for the three circles. */
+  #board .hit {
     fill: transparent;
     stroke: none;
     pointer-events: all;
-    cursor: default;
   }
 
-  /* === Nodes ============================================================= */
-  .node { cursor: pointer; }
-  .node .node-bg {
-    fill: var(--node-fill);
-    stroke: none;
-    transform-box: fill-box;
-    transform-origin: center;
-    transition: transform 0.28s ease, fill 0.45s ease, filter 0.28s ease;
+  /* === Node layer — HTML overlay, same vw/vh coordinate system =========== */
+  #nodeLayer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
   }
-  .node .node-num {
+  .node {
+    position: absolute;
+    width: var(--node-size);
+    height: var(--node-size);
+    transform: translate(-50%, -50%);
+    border: none;
+    border-radius: 50%;
+    background: var(--node-fill);
+    color: var(--node-text);
     font-family: 'Space Mono', monospace;
-    font-weight: 500;
-    fill: var(--node-text);
-    text-anchor: middle;
-    dominant-baseline: central;
-    letter-spacing: 0.05em;
+    font-size: max(0.73vw, 8px);
+    letter-spacing: 0.08em;
+    text-indent: 0.08em; /* re-centre digits: letter-spacing adds a trailing gap */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    pointer-events: auto;
+    user-select: none;
+    transition: transform 0.25s ease, background 0.45s ease, color 0.45s ease;
+  }
+  .node:hover { transform: translate(-50%, -50%) scale(1.1); }
+
+  /* Node 11 — Da'ath: veiled, inert. */
+  .node.veiled { opacity: var(--veiled-opacity); cursor: default; }
+  .node.veiled:hover { transform: translate(-50%, -50%); }
+
+  /* === Titles — in the margins, opposite corners ========================= */
+  /* They sit OUTSIDE the frame in the margin band and do not overlap the
+     frame lines, so no background mask is needed. */
+  .title {
+    position: absolute;
+    left: 6.98vw;
+    top: 3.24vh;
+    z-index: 1;
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    font-size: max(0.73vw, 9px);
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--fg-dim);
     user-select: none;
     pointer-events: none;
-    transition: fill 0.45s ease;
+    transition: color 0.45s ease;
   }
-  .node:hover .node-bg {
-    transform: scale(1.12);
-    filter: drop-shadow(0 0 6px var(--fg-dim));
+  .title.mirror {
+    left: 87.81vw;
+    top: 96.11vh;
+    transform: rotate(180deg);
+    transform-origin: left top;
   }
 
-  /* Node 11 — Da'ath, veiled. Inert. */
-  .node.veiled { cursor: default; }
-  .node.veiled .node-bg { fill: var(--node-veiled); }
-  .node.veiled .node-num { fill: var(--node-veiled-text); }
-  .node.veiled:hover .node-bg { transform: none; filter: none; }
-
-  /* === Theme toggle ====================================================== */
-  .theme-toggle {
+  /* === Theme toggle — discreet, typographic, top-right corner ============ */
+  #themeToggle {
     position: fixed;
-    top: 1.25rem;
-    right: 1.5rem;
-    background: none;
+    top: calc(var(--frame-top) / 2);
+    right: 1vw;
+    transform: translateY(-50%);
+    z-index: 20;
     border: none;
+    background: var(--bg); /* masks the right frame line where they cross */
     color: var(--fg-dim);
     font-family: 'Space Mono', monospace;
-    font-size: 0.62rem;
-    font-weight: 400;
+    font-size: max(0.57vw, 9px);
     letter-spacing: 0.32em;
+    padding: 0.5em 0.4em 0.5em 0.9em;
     cursor: pointer;
-    padding: 0.4rem 0.2rem;
-    z-index: 20;
     user-select: none;
-    transition: color 0.3s ease;
+    transition: color 0.3s ease, background 0.45s ease;
   }
-  .theme-toggle:hover { color: var(--fg); }
-  body.chapter-active > .theme-toggle { display: none; }
-
-  @media (max-width: 600px) {
-    .theme-toggle { top: 0.8rem; right: 0.8rem; font-size: 0.55rem; }
-  }
+  #themeToggle:hover { color: var(--fg); }
+  body.chapter-active #themeToggle { display: none; }
 </style>
 </head>
 <body>
 
-<button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema">○ LUZ</button>
+<button id="themeToggle" aria-label="Cambiar tema">○ LUZ</button>
 
 <div id="homepage">
-  <!-- The board is built from CONFIG below — see the bootstrap script. -->
-  <svg class="board" preserveAspectRatio="xMidYMid meet" aria-label="LA VIDA EN COLOR — mapa de capítulos"></svg>
+  <svg id="board" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg>
+  <div id="nodeLayer" aria-label="Mapa de capítulos"></div>
+  <div class="title">COLOR IN MOTION</div>
+  <div class="title mirror" aria-hidden="true">COLOR IN MOTION</div>
 </div>
 
 <div id="chapter-container"></div>
 
 <script>
   // =====================================================================
-  // CONFIG — single source of truth for the Tree homepage composition.
-  // Tune values here; the SVG rebuilds on load.
+  // CONFIG — single source of truth for the homepage composition.
+  // Reference artboard 1920×1080; every value below is vw / vh (except
+  // stroke widths, which are fixed CSS pixels and do not scale).
   // =====================================================================
   const CONFIG = {
-    // Full-bleed stage: the SVG fills 100vw × 100vh and its viewBox tracks
-    // the actual viewport pixels. Everything below is RESPONSIVE — the build
-    // function runs on load AND on every resize.
-
-    // Outer frame margin from the REAL viewport edges, in CSS pixels.
-    margin: 64,
-
-    // Guide lines — frame (4 outer lines) + subtle internal column/row grid.
-    guide: {
-      color: '#D9D9D9',         // light-mode colour (dark mode is in CSS)
-      frameWidth: 1.73,         // 1.0pt ≈ 1.73px — frame stroke
-      internalWidth: 0.6,       // subtle internal guides (thinner)
-    },
-    showInternalGuides: true,   // set false to keep only the 4-line frame
-
-    // Three large circles — additive RGB primaries.
-    //   • LEFT  : cx = frameLeft  + R  (left  edge touches left  frame line)
-    //   • MIDDLE: cx = viewportCx       (centred horizontally on the page)
-    //   • RIGHT : cx = frameRight − R  (right edge touches right frame line)
-    //   All three share circleCy = vertical centre of the inner frame (=
-    //   middle node row).
-    // R is derived from inner frame WIDTH and clamped so circles fit
-    // vertically. R must be > innerWidth/4 for L–R to overlap in the middle.
-    circleRadiusFraction: 0.32, // R = max(this·innerW, innerW/4+1) ∧ ≤ innerH/2
-    circleColors: {
-      r: '#ff0000',  // LEFT
-      g: '#00ff00',  // MIDDLE
-      b: '#1060ff',  // RIGHT
+    // Frame — 4 independent lines reaching the real viewport edges,
+    // crossing at the corners.
+    frame: {
+      top: 7.41,      // vh — top horizontal line
+      bottom: 92.59,  // vh — bottom horizontal line
+      left: 4.17,     // vw — left vertical line
+      right: 95.83,   // vw — right vertical line
     },
 
-    // Additive-light hover hook. Hovering a circle fades its tint in; the
-    // mix-blend-mode: screen on the tint group makes overlap zones combine
-    // toward yellow / cyan / magenta / white (visible in dark mode).
-    tint: {
-      rest: 0.00,
-      hover: 0.55,
-      fadeMs: 700,
+    // All geometric lines + circle outlines (light theme; dark in CSS).
+    line: {
+      color: '#D9D9D9',
+      width: 1,       // px, fixed — does not scale with viewport
     },
 
-    // 11 nodes in a 3-row staggered grid. Coordinates are FRACTIONS of the
-    // inner frame (0..1). Origin (0,0) is the inner-frame top-left corner.
-    //   xFrac : horizontal position within inner frame width
-    //   row   : 'top' | 'mid' | 'bot' → looks up rows[row] for yFrac
-    //   veiled: node 11 (Da'ath) — undefined / non-routing
-    rows: { top: 0.293, mid: 0.500, bot: 0.707 },
-    nodeRadius: 26,        // fixed pixel size — clickable target stays constant
-    veiledRadius: 24,
-    nodes: [
-      { num: '01', xFrac: 0.083, row: 'mid' },                 // far left
-      { num: '02', xFrac: 0.193, row: 'top' },
-      { num: '03', xFrac: 0.193, row: 'bot' },
-      { num: '11', xFrac: 0.291, row: 'mid', veiled: true },   // Da'ath
-      { num: '04', xFrac: 0.390, row: 'top' },
-      { num: '05', xFrac: 0.390, row: 'bot' },
-      { num: '06', xFrac: 0.500, row: 'mid' },                 // triple overlap
-      { num: '07', xFrac: 0.610, row: 'top' },
-      { num: '08', xFrac: 0.610, row: 'bot' },
-      { num: '09', xFrac: 0.720, row: 'mid' },
-      { num: '10', xFrac: 0.851, row: 'mid' },                 // far right
-    ],
+    // Three overlapping circles — additive RGB light primaries.
+    // Perfect circles CONTAINED in the frame: diameter = inner frame height
+    // (top frame line to bottom frame line), recomputed in px on resize so
+    // they never overflow the frame at any zoom level or aspect ratio.
+    circles: {
+      radiusFraction: 0.5,  // × inner frame height (0.5 = tangent to both lines)
+      cy: 50,               // vh — shared vertical centre (frame midpoint)
+      cx: { left: 28.13, center: 50.00, right: 71.88 },  // vw
+      // Additive hover hook: each circle tints with its primary on hover;
+      // screen blending makes overlap zones trend toward white.
+      tint: { left: '#FF0000', center: '#00FF00', right: '#0000FF' },
+      tintIntensity: 0.18,  // 0..1 — hover fill opacity (subtle first pass)
+      tintFadeMs: 600,
+    },
 
-    // Titles — "LA VIDA EN COLOR" sits ON the frame lines (top + bottom),
-    // mirrored at the bottom. A background mask hides the frame line where
-    // it would cut through the letters.
-    title: {
-      text: 'LA VIDA EN COLOR',
-      fontSize: 14,
-      bgPaddingX: 18,   // horizontal padding around text in the bg mask
-      bgPaddingY: 3,    // vertical padding around text in the bg mask
+    // Guide lines.
+    guides: {
+      // 6 horizontals, full viewport width — tangent pairs bracketing
+      // the three node rows (top / middle / bottom).
+      horizontal: [31.02, 38.43, 46.30, 53.70, 61.67, 69.07],  // vh
+      // 3 verticals, frame-top to frame-bottom — tangent to circle edges.
+      vertical: [26.04, 52.08, 73.96],  // vw
+    },
+
+    // 11 nodes, positioned by centre. Node 11 (Da'ath) is veiled: lighter,
+    // translucent, non-routing.
+    nodes: {
+      radius: 2.08,        // vw
+      fill: '#A0A0A0',     // light theme; dark theme in CSS
+      veiledOpacity: 0.35,
+      items: [
+        { num: '01', x: 14.06, y: 50.00 },
+        { num: '02', x: 22.24, y: 34.72 },
+        { num: '03', x: 22.24, y: 65.37 },
+        { num: '04', x: 43.02, y: 34.72 },
+        { num: '05', x: 43.02, y: 65.37 },
+        { num: '06', x: 50.00, y: 50.00 },
+        { num: '07', x: 64.53, y: 34.72 },
+        { num: '08', x: 64.53, y: 65.37 },
+        { num: '09', x: 78.28, y: 50.00 },
+        { num: '10', x: 86.56, y: 50.00 },
+        { num: '11', x: 32.55, y: 50.00, veiled: true },
+      ],
     },
   };
 
   // =====================================================================
-  // Build the SVG from CONFIG + the live viewport. Runs on load AND on every
-  // resize, so the frame, circles and nodes track the real viewport edges.
+  // Push CONFIG values into CSS custom properties. Injected as a :root
+  // rule (not inline styles) so :root.dark overrides still win.
+  // =====================================================================
+  const cfgStyle = document.createElement('style');
+  cfgStyle.textContent = ':root{'
+    + '--line:' + CONFIG.line.color + ';'
+    + '--line-w:' + CONFIG.line.width + 'px;'
+    + '--node-fill:' + CONFIG.nodes.fill + ';'
+    + '--node-size:' + (CONFIG.nodes.radius * 2) + 'vw;'
+    + '--veiled-opacity:' + CONFIG.nodes.veiledOpacity + ';'
+    + '--frame-top:' + CONFIG.frame.top + 'vh;'
+    + '--frame-bottom:' + CONFIG.frame.bottom + 'vh;'
+    + '--tint-fade:' + CONFIG.circles.tintFadeMs + 'ms;'
+    + '}';
+  document.head.appendChild(cfgStyle);
+
+  // =====================================================================
+  // Build the geometry once. The SVG has no viewBox, so percentage
+  // attributes track the live viewport natively (x% = vw, y% = vh).
+  // Only the circle RADIUS needs JS on resize — it derives from the inner
+  // frame height so the circles stay contained in the frame (see below).
   // =====================================================================
   const svgNS = 'http://www.w3.org/2000/svg';
-  const board = document.querySelector('.board');
+  const board = document.getElementById('board');
 
-  // Push CONFIG-controlled style values into CSS custom properties.
-  const rootEl = document.documentElement;
-  rootEl.style.setProperty('--guide-width', CONFIG.guide.frameWidth + 'px');
-  rootEl.style.setProperty('--guide-internal-width', CONFIG.guide.internalWidth + 'px');
-  if (!rootEl.classList.contains('dark')) {
-    rootEl.style.setProperty('--guide', CONFIG.guide.color);
-  }
-
-  function svgEl(name, attrs, text) {
+  function svgEl(name, attrs) {
     const el = document.createElementNS(svgNS, name);
-    if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
-    if (text != null) el.textContent = text;
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
     return el;
   }
 
-  // Hover state kept across rebuilds so resizing while hovered doesn't flicker.
-  const tintState = { r: CONFIG.tint.rest, g: CONFIG.tint.rest, b: CONFIG.tint.rest };
-
-  function build() {
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-    const M = CONFIG.margin;
-    const innerW = Math.max(0, W - 2 * M);
-    const innerH = Math.max(0, H - 2 * M);
-    const frameLeft  = M;
-    const frameRight = W - M;
-    const frameTop   = M;
-    const frameBot   = H - M;
-    const cxFrame    = W / 2;
-    const cyFrame    = H / 2;  // == frameTop + innerH/2 == middle node row
-
-    // Circle radius: target = CONFIG fraction of inner width, but clamp to fit
-    // vertically AND to satisfy R > innerW/4 (so L–R overlap exists).
-    const minR = innerW / 4 + 1;
-    const maxR = innerH / 2;
-    let R = CONFIG.circleRadiusFraction * innerW;
-    if (R < minR) R = minR;
-    if (R > maxR) R = maxR;
-
-    // Three circle centres derived from the live frame.
-    const circles = [
-      { id: 'r', cx: frameLeft  + R, color: CONFIG.circleColors.r },  // LEFT
-      { id: 'g', cx: cxFrame,        color: CONFIG.circleColors.g },  // MIDDLE
-      { id: 'b', cx: frameRight - R, color: CONFIG.circleColors.b },  // RIGHT
-    ];
-
-    // SVG viewBox tracks the viewport — 1 SVG unit = 1 CSS pixel.
-    board.setAttribute('viewBox', `0 0 ${W} ${H}`);
-
-    // Tear down and rebuild. Cheap at this element count and avoids divergent
-    // state between attributes and listeners.
-    while (board.firstChild) board.removeChild(board.firstChild);
-
-    // --- Subtle internal guides (behind everything) ----------------------
-    if (CONFIG.showInternalGuides) {
-      // Verticals: one per unique node column (xFrac → absolute x).
-      const colXs = [...new Set(CONFIG.nodes.map(n => frameLeft + n.xFrac * innerW))]
-        .sort((a, b) => a - b);
-      colXs.forEach(x => {
-        board.appendChild(svgEl('line', {
-          class: 'guide-internal',
-          x1: x, y1: frameTop, x2: x, y2: frameBot,
-        }));
-      });
-      // Horizontals: one per unique node row.
-      const rowYs = [...new Set(CONFIG.nodes.map(n => frameTop + CONFIG.rows[n.row] * innerH))]
-        .sort((a, b) => a - b);
-      rowYs.forEach(y => {
-        board.appendChild(svgEl('line', {
-          class: 'guide-internal',
-          x1: frameLeft, y1: y, x2: frameRight, y2: y,
-        }));
-      });
-    }
-
-    // --- Three circles: tints (additive blend) ---------------------------
-    const tintGroup = svgEl('g', { id: 'rgb-tints', style: 'isolation: isolate' });
-    const tintEls = {};
-    circles.forEach(c => {
-      const t = svgEl('circle', {
-        class: 'circle-tint',
-        cx: c.cx, cy: cyFrame, r: R,
-        fill: c.color,
-        'fill-opacity': tintState[c.id],
-      });
-      tintEls[c.id] = t;
-      tintGroup.appendChild(t);
-    });
-    board.appendChild(tintGroup);
-
-    // --- Circle outlines ------------------------------------------------
-    circles.forEach(c => {
-      board.appendChild(svgEl('circle', {
-        class: 'circle-outline',
-        cx: c.cx, cy: cyFrame, r: R,
-      }));
-    });
-
-    // --- Hover targets (under nodes; nodes capture clicks on top) -------
-    // Hook: extend to track multi-cursor / touch state.
-    circles.forEach(c => {
-      const hit = svgEl('circle', {
-        class: 'circle-hit',
-        cx: c.cx, cy: cyFrame, r: R,
-        'data-tint': c.id,
-      });
-      hit.addEventListener('mouseenter', () => {
-        tintState[c.id] = CONFIG.tint.hover;
-        tintEls[c.id].setAttribute('fill-opacity', CONFIG.tint.hover);
-      });
-      hit.addEventListener('mouseleave', () => {
-        tintState[c.id] = CONFIG.tint.rest;
-        tintEls[c.id].setAttribute('fill-opacity', CONFIG.tint.rest);
-      });
-      board.appendChild(hit);
-    });
-
-    // --- Nodes (drawn last; own pointer events) -------------------------
-    CONFIG.nodes.forEach(n => {
-      const nx = frameLeft + n.xFrac * innerW;
-      const ny = frameTop  + CONFIG.rows[n.row] * innerH;
-      const r  = n.veiled ? CONFIG.veiledRadius : CONFIG.nodeRadius;
-      const g  = svgEl('g', {
-        class: 'node' + (n.veiled ? ' veiled' : ''),
-        'data-num': n.num,
-      });
-      g.appendChild(svgEl('circle', { class: 'node-bg', cx: nx, cy: ny, r }));
-      g.appendChild(svgEl('text', {
-        class: 'node-num',
-        x: nx, y: ny,
-        'font-size': r * 0.55,
-      }, n.num));
-      if (!n.veiled) {
-        g.addEventListener('click', () => {
-          window.location.hash = '#capitulo-' + n.num;
-        });
-      }
-      board.appendChild(g);
-    });
-
-    // --- Frame: 4 outer lines (drawn AFTER circles so they sit on top
-    //     where the circles touch the frame) ----------------------------
-    board.appendChild(svgEl('line', { class: 'guide-frame', x1: frameLeft,  y1: frameTop, x2: frameRight, y2: frameTop })); // top
-    board.appendChild(svgEl('line', { class: 'guide-frame', x1: frameLeft,  y1: frameBot, x2: frameRight, y2: frameBot })); // bottom
-    board.appendChild(svgEl('line', { class: 'guide-frame', x1: frameLeft,  y1: frameTop, x2: frameLeft,  y2: frameBot })); // left
-    board.appendChild(svgEl('line', { class: 'guide-frame', x1: frameRight, y1: frameTop, x2: frameRight, y2: frameBot })); // right
-
-    // --- Titles ON the frame lines (with bg mask) -----------------------
-    function placeTitleOnFrame(yLine, mirrored) {
-      const t = svgEl('text', {
-        class: 'title',
-        x: cxFrame,
-        y: yLine,
-        'font-size': CONFIG.title.fontSize,
-      }, CONFIG.title.text);
-      if (mirrored) t.setAttribute('transform', `rotate(180 ${cxFrame} ${yLine})`);
-      board.appendChild(t);
-
-      // Mask the frame line behind the text. Rotation is around the text
-      // centre, so the unrotated bbox aligns either way.
-      const bb = t.getBBox();
-      const px = CONFIG.title.bgPaddingX;
-      const py = CONFIG.title.bgPaddingY;
-      board.insertBefore(svgEl('rect', {
-        class: 'title-bg',
-        x: bb.x - px, y: bb.y - py,
-        width:  bb.width  + 2 * px,
-        height: bb.height + 2 * py,
-      }), t);
-    }
-    placeTitleOnFrame(frameTop, false);
-    placeTitleOnFrame(frameBot, true);
+  // All 9 circle elements (tints, outlines, hit targets) share one radius,
+  // derived from the inner frame HEIGHT — see updateCircleRadii() below.
+  const allCircles = [];
+  function circleGeometry(el, cxVw) {
+    el.style.cx = cxVw + 'vw';
+    el.style.cy = CONFIG.circles.cy + 'vh';
+    allCircles.push(el);
   }
 
-  // Initial build + rebuild on resize (rAF-throttled).
-  let rafPending = false;
-  function scheduleBuild() {
-    if (rafPending) return;
-    rafPending = true;
-    requestAnimationFrame(() => { rafPending = false; build(); });
+  // --- Additive RGB tints (bottom layer, isolated screen-blend group) ---
+  const tintGroup = svgEl('g', { class: 'tints' });
+  const tintEls = {};
+  for (const key of ['left', 'center', 'right']) {
+    const tint = svgEl('circle', { class: 'tint' });
+    circleGeometry(tint, CONFIG.circles.cx[key]);
+    tint.style.fill = CONFIG.circles.tint[key];
+    tint.style.fillOpacity = 0;
+    tintEls[key] = tint;
+    tintGroup.appendChild(tint);
   }
-  build();
-  window.addEventListener('resize', scheduleBuild);
-  // Rebuild once fonts load — title bg-mask sizing depends on the real metrics.
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(build).catch(() => {});
+  board.appendChild(tintGroup);
+
+  // --- 6 horizontal guide lines (full viewport width) --------------------
+  for (const y of CONFIG.guides.horizontal) {
+    board.appendChild(svgEl('line', {
+      class: 'guide', x1: '0', y1: y + '%', x2: '100%', y2: y + '%',
+    }));
+  }
+
+  // --- 3 vertical guide lines (frame top to frame bottom) ----------------
+  for (const x of CONFIG.guides.vertical) {
+    board.appendChild(svgEl('line', {
+      class: 'guide',
+      x1: x + '%', y1: CONFIG.frame.top + '%',
+      x2: x + '%', y2: CONFIG.frame.bottom + '%',
+    }));
+  }
+
+  // --- Three circle outlines ---------------------------------------------
+  for (const key of ['left', 'center', 'right']) {
+    const c = svgEl('circle', { class: 'circle' });
+    circleGeometry(c, CONFIG.circles.cx[key]);
+    board.appendChild(c);
+  }
+
+  // --- Frame: 4 independent lines to the real viewport edges -------------
+  board.appendChild(svgEl('line', { class: 'frame', x1: '0', y1: CONFIG.frame.top + '%', x2: '100%', y2: CONFIG.frame.top + '%' }));
+  board.appendChild(svgEl('line', { class: 'frame', x1: '0', y1: CONFIG.frame.bottom + '%', x2: '100%', y2: CONFIG.frame.bottom + '%' }));
+  board.appendChild(svgEl('line', { class: 'frame', x1: CONFIG.frame.left + '%', y1: '0', x2: CONFIG.frame.left + '%', y2: '100%' }));
+  board.appendChild(svgEl('line', { class: 'frame', x1: CONFIG.frame.right + '%', y1: '0', x2: CONFIG.frame.right + '%', y2: '100%' }));
+
+  // --- Hover targets (last in SVG = on top of it; HTML nodes still win) --
+  for (const key of ['left', 'center', 'right']) {
+    const hit = svgEl('circle', { class: 'hit' });
+    circleGeometry(hit, CONFIG.circles.cx[key]);
+    hit.addEventListener('mouseenter', () => {
+      tintEls[key].style.fillOpacity = CONFIG.circles.tintIntensity;
+    });
+    hit.addEventListener('mouseleave', () => {
+      tintEls[key].style.fillOpacity = 0;
+    });
+    board.appendChild(hit);
+  }
+
+  // --- Circle radius: derived from the inner frame HEIGHT ----------------
+  // r = radiusFraction × (frame bottom − frame top) in px, so the circles
+  // stay perfectly contained in the frame at any zoom / aspect ratio.
+  // (cx stays in vw, cy in vh — only r needs recomputing on resize.)
+  function updateCircleRadii() {
+    const innerH = window.innerHeight * (CONFIG.frame.bottom - CONFIG.frame.top) / 100;
+    const r = innerH * CONFIG.circles.radiusFraction;
+    for (const c of allCircles) c.style.r = r + 'px';
+  }
+  updateCircleRadii();
+  // Synchronous on purpose: 9 style writes is cheap, and deferring to rAF
+  // can stall in background/hidden pages. ResizeObserver also catches zoom
+  // and viewport changes that don't dispatch a window resize event.
+  window.addEventListener('resize', updateCircleRadii);
+  if (window.ResizeObserver) {
+    new ResizeObserver(updateCircleRadii).observe(document.documentElement);
+  }
+
+  // --- 11 nodes: HTML buttons in the same vw/vh coordinate system --------
+  const nodeLayer = document.getElementById('nodeLayer');
+  for (const n of CONFIG.nodes.items) {
+    const node = document.createElement('button');
+    node.className = 'node' + (n.veiled ? ' veiled' : '');
+    node.style.left = n.x + 'vw';
+    node.style.top = n.y + 'vh';
+    node.textContent = n.num;
+    if (n.veiled) {
+      node.setAttribute('aria-hidden', 'true');
+      node.tabIndex = -1;
+    } else {
+      node.setAttribute('aria-label', 'Capítulo ' + n.num);
+      node.addEventListener('click', () => {
+        window.location.hash = '#capitulo-' + n.num;
+      });
+    }
+    nodeLayer.appendChild(node);
   }
 
   // =====================================================================
-  // Theme — light / dark, persisted in localStorage.
+  // Theme — light / dark, persisted in localStorage (shared with chapters).
   // =====================================================================
-  const stored = localStorage.getItem('beLight.theme');
-  if (stored === 'dark') rootEl.classList.add('dark');
+  const rootEl = document.documentElement;
+  if (localStorage.getItem('beLight.theme') === 'dark') rootEl.classList.add('dark');
 
   const toggle = document.getElementById('themeToggle');
   function syncToggle() {
     toggle.textContent = rootEl.classList.contains('dark') ? '● OSC' : '○ LUZ';
   }
-  function applyGuideForTheme() {
-    if (rootEl.classList.contains('dark')) {
-      rootEl.style.removeProperty('--guide');  // let :root.dark { --guide } win
-    } else {
-      rootEl.style.setProperty('--guide', CONFIG.guide.color);
-    }
-  }
   toggle.addEventListener('click', () => {
     rootEl.classList.toggle('dark');
     localStorage.setItem('beLight.theme', rootEl.classList.contains('dark') ? 'dark' : 'light');
     syncToggle();
-    applyGuideForTheme();
   });
   syncToggle();
-  applyGuideForTheme();
 </script>
 
 <script src="router.js"></script>
