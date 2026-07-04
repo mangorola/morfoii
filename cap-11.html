@@ -1,0 +1,34 @@
+<!-- Chapter 11 — IRIDESCENCE (Da'ath) -->
+<!-- Wrapper loaded into index.html via hash routing (#capitulo-11). -->
+<!-- No <script>: safe for innerHTML injection. The experience lives in
+     cap-11-iridescence.html — an iframe document, so its sensor JS runs
+     normally and the motion-sensor permissions are granted explicitly.
+     Overlay text and the back control live INSIDE the iframe document
+     (they need the gyroscope state to choreograph themselves). -->
+
+<style>
+  #cap-11-iridescence-wrap {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+  #cap-11-iridescence-wrap iframe {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: block;
+  }
+</style>
+
+<section id="cap-11-iridescence-wrap">
+  <iframe
+    src="cap-11-iridescence.html"
+    title="IRIDESCENCE — la sefirá oculta"
+    allow="gyroscope; accelerometer; magnetometer"
+    scrolling="no"
+  ></iframe>
+</section>

@@ -44,11 +44,31 @@ Color-as-perception is born in the tension between emission and absorption, reso
 | 08 | Hod | left, low | analysis, the spectrum decomposed, the prism | (to define) |
 | 09 | Yesod | center, low | the medium that transmits; light amolda to what it meets | **ADAPTABILITY** |
 | 10 | Malkuth | center, bottom | the eye, the perceived world — color appears on things | (to define) — closing chapter |
-| 11 | Da'ath | center, veiled | hidden / white-light unity | **HIDDEN**, undefined |
+| 11 | Da'ath | center, veiled | hidden / white-light unity | **IRIDESCENCE** — mobile-only, gyroscope-driven (see spec below) |
 
 Note: PATH's original sound/sonoluminescence idea is set aside in favor of a more abstract reading suited to Binah (above the abyss).
 
 ## Detailed Chapter Specs
+
+### 11 — IRIDESCENCE (Da'ath) — mobile-only hidden chapter — file `cap-11-iridescence.html`
+
+**The hidden sefirah, accessible only through the body.**
+
+**Principle:** *"Color is not in things — it is in the space between the light, the surface, and the eye that looks. Change your position, and the world changes its color."*
+
+**Concept:** Iridescence — the phenomenon where color changes depending on the observer's viewing angle (butterfly wings, soap bubbles, oil slicks, opals). Not pigment but thin-film interference: light bounces between microscopic layers, and depending on the angle of incidence, different wavelengths reinforce or cancel. The "same" surface is blue from here and gold from there. The phone's gyroscope maps the user's physical tilt to a viewing angle; the screen responds as an iridescent surface would. For the first time in the project, the user's real body enters the equation — the hand, the wrist, the orientation in physical space. Light stops being a digital concept and becomes embodied experience.
+
+**Why Da'ath / why hidden:** Da'ath is the veiled sefirah that cannot be accessed through the intellect (desktop / mouse / click). It reveals itself only through the body — through the physical act of tilting the device. Node 11 on the homepage appears inert on desktop (veiled, non-clickable); on mobile, it becomes active and routes to this chapter. The hidden chapter requires a body to exist.
+
+**Access logic:**
+
+- On DESKTOP: node 11 stays veiled and inert (as now). No route.  
+- On MOBILE (touch device): node 11 becomes active — slightly more visible, clickable, routes to `#capitulo-11`. A subtle visual cue hints that something is different (e.g. a faint pulse, or the node becomes slightly brighter on mobile).  
+- The chapter itself shows a message if opened without gyroscope support.
+
+**Technical:** uses DeviceOrientationEvent API (alpha/beta/gamma). Requires user permission on iOS (must call `DeviceOrientationEvent.requestPermission()`). Standalone HTML with own JS → embedded via iframe.
+
+**Visual/interaction:** fullscreen iridescent surface. Color shifts continuously with phone tilt. No UI, no buttons — only color responding to the body. Dark/light mode still applies (background adapts).
 
 ### 07 — WAVEFRONT (Netzach) — currently built in file `cap-04-coherence.html`
 

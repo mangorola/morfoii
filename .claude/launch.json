@@ -7,6 +7,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["serve", "."],
       "port": 3101
+    },
+    {
+      "name": "static-b",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-l", "4180", "."],
+      "port": 4180
     }
   ]
 }

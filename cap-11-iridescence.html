@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>11 — IRIDESCENCE</title>
+
+<!-- Theme before first paint: same key + class contract as index.html. -->
+<script>
+  try {
+    if (localStorage.getItem('beLight.theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
+
+  /* Theme — light: iridescence over warm white; dark: oil on wet asphalt.
+     --h0/--h1/--h2 (hues) and --dS/--dL (alpha-driven sat/light offsets) are
+     written by JS; everything else is theme material. The gradient stops keep
+     their hue chain (centre = computed wavelength, edges = shorter neighbouring
+     wavelengths, as at the periphery of a real film where the viewing angle
+     grows and the reinforced colour slides toward violet). */
+  :root {
+    --base: #FAF6EF;
+    --ink: #1A1A1A;
+    --ink-soft: rgba(26, 26, 26, 0.55);
+    --ink-faint: rgba(26, 26, 26, 0.28);
+    --veil: rgba(250, 246, 239, 0.84);
+    --scrim: rgba(250, 246, 239, 0.55);
+    --s0: 68; --l0: 77;
+    --s1: 62; --l1: 72;
+    --s2: 56; --l2: 67;
+    --sheen-o: 0.5;
+    --grain-o: 0.05;
+    --h0: 210; --h1: 254; --h2: 278;
+    --dS: 0; --dL: 0;
+  }
+  :root.dark {
+    --base: #0D0D0D;
+    --ink: #F5F5F0;
+    --ink-soft: rgba(245, 245, 240, 0.6);
+    --ink-faint: rgba(245, 245, 240, 0.3);
+    --veil: rgba(13, 13, 13, 0.8);
+    --scrim: rgba(13, 13, 13, 0.38);
+    --s0: 97; --l0: 52;
+    --s1: 93; --l1: 38;
+    --s2: 88; --l2: 24;
+    --sheen-o: 0.4;
+    --grain-o: 0.075;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100vh;   /* fallback for older browsers */
+    height: 100dvh;  /* modern: excludes mobile browser chrome */
+    background: var(--base);
+    color: var(--ink);
+    font-family: 'Space Grotesk', sans-serif;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: background 0.45s ease, color 0.45s ease;
+  }
+
+  /* === The surface ======================================================= */
+  /* One radial gradient, centred on the screen. JS never touches this rule:
+     it only writes the custom properties, CSS re-renders. The primary hue
+     plateaus across the heart of the screen (0→30%), then slides through its
+     shorter-wavelength neighbours toward the periphery — as at the edge of a
+     real film, where the viewing angle grows and the colour shifts violet. */
+  #surface {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(
+      at 50% 50%,
+      hsl(var(--h0), calc((var(--s0) + var(--dS)) * 1%),        calc((var(--l0) + var(--dL)) * 1%))         0%,
+      hsl(var(--h0), calc((var(--s0) + var(--dS)) * 1%),        calc((var(--l0) + var(--dL)) * 1%))         30%,
+      hsl(var(--h1), calc((var(--s1) + var(--dS)) * 1%),        calc((var(--l1) + var(--dL) * 0.6) * 1%))   66%,
+      hsl(var(--h2), calc((var(--s2) + var(--dS) * 0.5) * 1%),  calc((var(--l2) + var(--dL) * 0.35) * 1%))  94%,
+      var(--base) 126%
+    );
+  }
+
+  /* Shimmer — a soft luminance band drifting across the surface. Transform-only
+     animation (GPU-cheap); the film feels material, never flat. */
+  #sheen {
+    position: fixed;
+    inset: -40%;
+    background: linear-gradient(115deg,
+      transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%);
+    mix-blend-mode: soft-light;
+    opacity: var(--sheen-o);
+    pointer-events: none;
+    will-change: transform;
+    animation: sheen-drift 17s ease-in-out infinite alternate;
+  }
+  @keyframes sheen-drift {
+    from { transform: translate3d(-7%, -3%, 0); }
+    to   { transform: translate3d(7%, 3%, 0); }
+  }
+
+  /* Static micro-grain: thin films are never optically clean. */
+  #grain {
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+    mix-blend-mode: overlay;
+    opacity: var(--grain-o);
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #sheen { animation: none; }
+  }
+
+  /* === Principle line — appears once, then the surface is alone ========== */
+  .principle {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 6;
+    max-width: min(28ch, 84vw);
+    text-align: center;
+    font-weight: 300;
+    font-size: clamp(17px, 4.6vw, 24px);
+    line-height: 1.7;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    text-shadow: 0 0 26px var(--scrim);
+    opacity: 0;
+    transition: opacity 1.4s ease;
+    pointer-events: none;
+  }
+  .principle.show { opacity: 1; }
+
+  /* === Chapter mark — almost invisible ==================================== */
+  .chapter-mark {
+    position: fixed;
+    top: max(22px, env(safe-area-inset-top, 0px));
+    left: max(24px, env(safe-area-inset-left, 0px));
+    z-index: 7;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .chapter-mark .num {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.3em;
+  }
+  .chapter-mark .name {
+    font-weight: 300;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  /* === Back to index — the only living control =========================== */
+  .back-index {
+    position: fixed;
+    right: max(20px, env(safe-area-inset-right, 0px));
+    bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    z-index: 8;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--ink-soft);
+    border-bottom: 1px solid var(--ink-faint);
+    padding: 12px 4px 5px;   /* generous tap target above the baseline */
+    pointer-events: auto;
+    transition: color 0.3s ease, border-color 0.3s ease;
+  }
+  .back-index:hover,
+  .back-index:active { color: var(--ink); border-color: var(--ink-soft); }
+
+  /* === Panel — permission prompt / fallback messages ====================== */
+  /* Starts as a veil: the surface glows dimly behind it (Da'ath is veiled
+     until the body unlocks it). In message states the veil clears and only a
+     soft scrim keeps the text legible over full colour. */
+  .panel {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(30px, 6vh, 44px);
+    text-align: center;
+    padding: max(24px, env(safe-area-inset-top, 0px)) 24px
+             max(24px, env(safe-area-inset-bottom, 0px));
+    background: var(--veil);
+    transition: opacity 0.9s ease, visibility 0s linear 0.9s;
+  }
+  .panel.clear {
+    background: radial-gradient(62% 46% at 50% 50%, var(--scrim) 0%, transparent 100%);
+  }
+  .panel.gone {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .panel-line {
+    font-weight: 300;
+    font-size: clamp(19px, 5.4vw, 28px);
+    line-height: 1.55;
+    letter-spacing: 0.06em;
+    max-width: 21ch;
+    color: var(--ink);
+  }
+  .panel-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--ink-faint);
+    padding: 18px 12px 10px;   /* ≥44px tap target on the mobile-only path */
+    cursor: pointer;
+    transition: color 0.3s ease, border-color 0.3s ease, opacity 0.3s ease;
+  }
+  .panel-btn:hover { border-color: var(--ink-soft); }
+  .panel-btn:active { opacity: 0.55; }
+  .panel.msg .panel-btn { display: none; }
+</style>
+</head>
+<body>
+
+<div id="surface" aria-hidden="true"></div>
+<div id="sheen" aria-hidden="true"></div>
+<div id="grain" aria-hidden="true"></div>
+
+<p class="principle" id="principle">Color is not in things — it is in the space between the light, the surface, and the eye that looks.</p>
+
+<div class="chapter-mark" aria-hidden="true">
+  <span class="num">11</span>
+  <span class="name">Iridescence</span>
+</div>
+
+<a class="back-index" id="backIndex" href="#home">← Índice</a>
+
+<section class="panel" id="panel">
+  <p class="panel-line" id="panelLine">Tilt your phone to see color change</p>
+  <button class="panel-btn" id="enableBtn" type="button">Enable motion</button>
+</section>
+
+<script>
+(function () {
+  // =====================================================================
+  // CONFIG — every tunable of the iridescent model in one place.
+  // =====================================================================
+  const CONFIG = {
+    // Simplified thin-film interference. The film lies flat in the world;
+    // the phone's tilt is the viewing angle onto it. Constructive
+    // reinforcement: lambda = lambda0 * cos(refraction angle), with the
+    // refraction angle bounded by Snell's law — so the reinforced
+    // wavelength slides from lambda0 (red, flat phone / normal incidence)
+    // down to ~lambda0 * cos(asin(1/n)) (violet, upright / grazing view).
+    film: {
+      n: 1.33,          // refractive index (soap film)
+      lambda0: 660,     // nm reinforced at normal incidence (red end)
+      lambdaMin: 425,   // clamp of the visible span we map
+      lambdaMax: 665,
+    },
+
+    // Approximate spectral locus: wavelength (nm) → HSL hue. Piecewise
+    // linear between anchors; monotonic, so slow tilts slide smoothly.
+    spectrum: [
+      [425, 278], [440, 266], [460, 240], [480, 200], [500, 165],
+      [520, 140], [545, 122], [565, 95], [580, 62], [595, 42],
+      [615, 22], [640, 8], [665, 0],
+    ],
+
+    gammaShiftNm: 38,     // gamma (left-right tilt) → ± secondary wavelength shift
+    alphaSatAmp: 7,       // alpha (compass) → saturation swing, %
+    alphaLightAmp: 3.5,   // alpha (compass) → lightness swing, %
+    stops: { midNm: 26, edgeNm: 58 },  // spectral neighbours toward the screen edge
+
+    smooth: 0.1,          // lerp factor per frame (sensor noise → silk)
+    sensorThrottleMs: 33, // phones fire deviceorientation at 60–100 Hz; ~30 fps is plenty
+    renderIntervalMs: 33, // CSS variable writes capped at ~30 fps
+
+    shimmerAmp: 1.2,      // slow luminance breath, % lightness
+    shimmerPeriodMs: 9000,
+
+    veiledAngle: 65,      // static viewing angle behind the permission veil (blue — upright phone)
+    fallbackAngle: 38,    // static viewing angle for fallback states (gold)
+
+    principle: { delayMs: 600, holdMs: 4000 },  // entry line: fade in, stay, fade out
+    sensorTimeoutMs: 2500, // granted but silent sensor → treat as unavailable
+  };
+
+  const COPY = {
+    noGyro: 'Gyroscope not available on this device.',
+    desktop: 'This chapter lives in your hands. Open it on your phone.',
+  };
+
+  // =====================================================================
+  // Colour pipeline — tilt angle → wavelength → gradient custom properties.
+  // =====================================================================
+  const DEG = Math.PI / 180;
+  const rootStyle = document.documentElement.style;
+
+  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+  // Viewing angle (0° flat → 90° grazing) → reinforced wavelength (nm).
+  function filmLambda(thetaDeg) {
+    const sinT = Math.sin(thetaDeg * DEG) / CONFIG.film.n;
+    const cosT = Math.sqrt(1 - sinT * sinT);
+    return CONFIG.film.lambda0 * cosT;
+  }
+
+  function hueOf(nm) {
+    const S = CONFIG.spectrum;
+    if (nm <= S[0][0]) return S[0][1];
+    if (nm >= S[S.length - 1][0]) return S[S.length - 1][1];
+    for (let i = 1; i < S.length; i++) {
+      if (nm <= S[i][0]) {
+        const t = (nm - S[i - 1][0]) / (S[i][0] - S[i - 1][0]);
+        return S[i - 1][1] + (S[i][1] - S[i - 1][1]) * t;
+      }
+    }
+    return S[S.length - 1][1];
+  }
+
+  // Write the gradient variables. Only hues + offsets: saturation/lightness
+  // bases stay in CSS, so a theme switch restyles the same wavelength.
+  function applyColor(lambda, dS, dL) {
+    const { lambdaMin, lambdaMax } = CONFIG.film;
+    const l0 = clamp(lambda, lambdaMin, lambdaMax);
+    rootStyle.setProperty('--h0', hueOf(l0).toFixed(1));
+    rootStyle.setProperty('--h1', hueOf(clamp(l0 - CONFIG.stops.midNm, lambdaMin, lambdaMax)).toFixed(1));
+    rootStyle.setProperty('--h2', hueOf(clamp(l0 - CONFIG.stops.edgeNm, lambdaMin, lambdaMax)).toFixed(1));
+    rootStyle.setProperty('--dS', dS.toFixed(2));
+    rootStyle.setProperty('--dL', dL.toFixed(2));
+  }
+
+  function setStatic(angleDeg) {
+    applyColor(filmLambda(angleDeg), 0, 0);
+  }
+
+  // =====================================================================
+  // Sensor state — targets set by the (throttled) event, currents lerped
+  // toward them each frame. Alpha is smoothed as sin/cos so the 360°→0°
+  // wrap never jumps.
+  // =====================================================================
+  const target = { lambda: filmLambda(CONFIG.veiledAngle), gammaOff: 0, aSin: 0, aCos: 1 };
+  const current = { lambda: target.lambda, gammaOff: 0, aSin: 0, aCos: 1 };
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const shimmerAmp = reduceMotion ? 0 : CONFIG.shimmerAmp;
+  const shimmerW = (Math.PI * 2) / CONFIG.shimmerPeriodMs;
+
+  let running = false;
+  let sensing = false;
+  let gotData = false;
+  let lastEventAt = 0;
+  let lastRenderAt = 0;
+  let sensorTimer = 0;
+
+  function onOrientation(e) {
+    const now = performance.now();
+    if (now - lastEventAt < CONFIG.sensorThrottleMs) return;  // throttle 60–100 Hz → ~30 fps
+    lastEventAt = now;
+
+    // Desktop browsers can emit one ghost event with null axes — not data.
+    if (e.beta == null && e.gamma == null) return;
+
+    if (!gotData) {
+      gotData = true;
+      clearTimeout(sensorTimer);
+      reveal();
+    }
+
+    const beta = e.beta || 0;    // front-back tilt, -180..180 → PRIMARY hue
+    const gamma = e.gamma || 0;  // left-right tilt, -90..90  → secondary modulation
+    const alpha = e.alpha || 0;  // compass, 0..360           → subtle sat/light
+
+    // Fold beta into a 0..90° viewing angle: flat phone = normal incidence
+    // (warm end), upright = grazing (violet end). Continuous at every fold.
+    const ab = Math.abs(beta);
+    const theta = ab > 90 ? 180 - ab : ab;
+
+    target.lambda = filmLambda(theta);
+    // Gamma weighted by cos(theta): full play when the phone is flat, fading
+    // to zero when upright — exactly where gamma becomes gimbal-unstable.
+    target.gammaOff = -(gamma / 90) * CONFIG.gammaShiftNm * Math.cos(theta * DEG);
+    target.aSin = Math.sin(alpha * DEG);
+    target.aCos = Math.cos(alpha * DEG);
+  }
+
+  function frame(now) {
+    if (!running) return;
+
+    const k = CONFIG.smooth;
+    current.lambda += (target.lambda - current.lambda) * k;
+    current.gammaOff += (target.gammaOff - current.gammaOff) * k;
+    current.aSin += (target.aSin - current.aSin) * k;
+    current.aCos += (target.aCos - current.aCos) * k;
+
+    if (now - lastRenderAt >= CONFIG.renderIntervalMs) {
+      lastRenderAt = now;
+      applyColor(
+        current.lambda + current.gammaOff,
+        CONFIG.alphaSatAmp * current.aSin,
+        CONFIG.alphaLightAmp * current.aCos + shimmerAmp * Math.sin(now * shimmerW)
+      );
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function startLoop() {
+    if (running) return;
+    running = true;
+    requestAnimationFrame(frame);
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { running = false; }
+    else if (sensing) { startLoop(); }
+  });
+
+  // =====================================================================
+  // States — veiled prompt → experience, or one of the two fallbacks.
+  // =====================================================================
+  const panel = document.getElementById('panel');
+  const panelLine = document.getElementById('panelLine');
+  const enableBtn = document.getElementById('enableBtn');
+  const principle = document.getElementById('principle');
+
+  function showMessage(text) {
+    panelLine.textContent = text;
+    panel.classList.add('msg', 'clear');
+    panel.classList.remove('gone');
+  }
+
+  function noGyro() {
+    window.removeEventListener('deviceorientation', onOrientation);
+    sensing = false;
+    running = false;
+    setStatic(CONFIG.fallbackAngle);
+    showMessage(COPY.noGyro);
+  }
+
+  function reveal() {
+    panel.classList.add('gone');
+    setTimeout(function () { principle.classList.add('show'); }, CONFIG.principle.delayMs);
+    setTimeout(function () { principle.classList.remove('show'); },
+      CONFIG.principle.delayMs + CONFIG.principle.holdMs);
+  }
+
+  function startSensors() {
+    sensing = true;
+    window.addEventListener('deviceorientation', onOrientation);
+    sensorTimer = setTimeout(function () { if (!gotData) noGyro(); }, CONFIG.sensorTimeoutMs);
+    startLoop();
+  }
+
+  function onEnable() {
+    enableBtn.disabled = true;
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS 13+: must be called inside this user gesture.
+      DeviceOrientationEvent.requestPermission()
+        .then(function (state) { state === 'granted' ? startSensors() : noGyro(); })
+        .catch(noGyro);
+    } else {
+      // Android / older iOS: no permission gate.
+      startSensors();
+    }
+  }
+
+  // =====================================================================
+  // Entry — decide which of the three openings this body gets.
+  // =====================================================================
+  setStatic(CONFIG.veiledAngle);  // dim life behind the veil from the first frame
+
+  const hasOrientation = typeof DeviceOrientationEvent !== 'undefined';
+  const isTouch = window.matchMedia('(hover: none)').matches || navigator.maxTouchPoints > 0;
+
+  if (!hasOrientation || !isTouch) {
+    // Desktop, or a browser with no orientation API at all.
+    setStatic(CONFIG.fallbackAngle);
+    showMessage(COPY.desktop);
+  } else {
+    enableBtn.addEventListener('click', onEnable);
+  }
+
+  // =====================================================================
+  // Back to index — hash change on the parent document, never a reload.
+  // =====================================================================
+  document.getElementById('backIndex').addEventListener('click', function (e) {
+    e.preventDefault();
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.location.hash = '#home';
+        return;
+      }
+    } catch (err) { /* cross-origin parent — fall through */ }
+    window.location.href = 'index.html#home';
+  });
+
+  // Theme can change in another tab / the homepage — mirror it live.
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'beLight.theme') {
+      document.documentElement.classList.toggle('dark', e.newValue === 'dark');
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

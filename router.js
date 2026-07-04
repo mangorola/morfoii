@@ -19,6 +19,7 @@
     '08': 'cap-08.html',
     '09': 'cap-09.html',
     '10': 'cap-10.html',
+    '11': 'cap-11.html',
   };
 
   function renderFallback(container, num) {

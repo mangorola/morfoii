@@ -148,6 +148,20 @@
   .node.veiled { opacity: var(--veiled-opacity); cursor: default; }
   .node.veiled:hover circle { transform: none; }
 
+  /* On touch devices (no hover) Da'ath awakens: the hidden sefirah reveals
+     itself only through the body. Slightly more visible, gently breathing,
+     and tappable. Scoped to (hover: none) so desktop is completely unaffected. */
+  @media (hover: none) {
+    .node.veiled {
+      cursor: pointer;
+      animation: veiled-breathe 4s ease-in-out infinite;
+    }
+  }
+  @keyframes veiled-breathe {
+    0%, 100% { opacity: 0.45; }
+    50%      { opacity: 0.6; }
+  }
+
   /* === Node 01 — rotating CMY disc ======================================= */
   /* A foreignObject inside the node group: it lives in artboard coordinates
      so it scales with the viewBox like everything else. Outer wrap handles
@@ -500,6 +514,17 @@
     }, n.num));
     if (n.veiled) {
       g.setAttribute('aria-hidden', 'true');
+      // Da'ath is veiled and inert on desktop, but on touch devices (no hover)
+      // it becomes accessible — a tap routes to the hidden chapter 11.
+      if (window.matchMedia('(hover: none)').matches) {
+        g.removeAttribute('aria-hidden');
+        g.setAttribute('role', 'link');
+        g.setAttribute('tabindex', '0');
+        g.setAttribute('aria-label', 'Capítulo ' + n.num);
+        g.addEventListener('click', () => {
+          window.location.hash = '#capitulo-' + n.num;
+        });
+      }
     } else {
       g.setAttribute('role', 'link');
       g.setAttribute('tabindex', '0');
