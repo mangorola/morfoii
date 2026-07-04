@@ -350,13 +350,20 @@
     board.appendChild(hit);
   }
 
-  // --- Circle radius: derived from the inner frame HEIGHT ----------------
-  // r = radiusFraction × (frame bottom − frame top) in px, so the circles
-  // stay perfectly contained in the frame at any zoom / aspect ratio.
+  // --- Circle radius: contained in the frame on ANY aspect ratio ---------
+  // Two constraints, take the smaller:
+  //   vertical   — r ≤ radiusFraction × inner frame height, so the circles
+  //                never cross the top/bottom frame lines;
+  //   horizontal — r ≤ distance from the outer circle centres to the side
+  //                frame lines, so they never cross the left/right lines.
+  // At exactly 16:9 both are equal (tangent all around, the Figma design);
+  // off 16:9 the binding constraint shrinks the circles to stay inside.
   // (cx stays in vw, cy in vh — only r needs recomputing on resize.)
   function updateCircleRadii() {
     const innerH = window.innerHeight * (CONFIG.frame.bottom - CONFIG.frame.top) / 100;
-    const r = innerH * CONFIG.circles.radiusFraction;
+    const maxV = innerH * CONFIG.circles.radiusFraction;
+    const maxH = window.innerWidth * (CONFIG.circles.cx.left - CONFIG.frame.left) / 100;
+    const r = Math.min(maxV, maxH);
     for (const c of allCircles) c.style.r = r + 'px';
   }
   updateCircleRadii();
