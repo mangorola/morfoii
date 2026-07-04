@@ -155,11 +155,22 @@
   /* The foreignObject is visual only — hit-testing inside a transformed,
      viewBox-scaled foreignObject is unreliable (Chromium/Safari), so an
      invisible SVG circle on top is the real click/hover target. */
-  .disc-node foreignObject { pointer-events: none; }
+  .disc-node foreignObject { pointer-events: none; overflow: visible; }
   .disc-node .disc-hit { fill: transparent; stroke: none; }
-  .disc-wrap {
+  /* Fills the padded foreignObject and centres the disc — the padding is the
+     headroom that lets the hover scale grow without hitting the fO bounds. */
+  .disc-outer {
     width: 100%;
     height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+  }
+  .disc-wrap {
+    /* True disc diameter = foreignObject size ÷ discPad. */
+    width: calc(100% / var(--disc-pad, 1.5));
+    height: calc(100% / var(--disc-pad, 1.5));
     border-radius: 50%;
     overflow: hidden;   /* clip the square spinning div to the disc shape */
     transform-origin: center;
@@ -334,6 +345,9 @@
       veiledOpacity: 0.35,
       fontSize: 14,
       discSpinS: 6,        // seconds per full turn of node 01's CMY disc
+      discBlur: 10,        // px (artboard units) — softens the CMY gradient
+      discPad: 1.5,        // foreignObject size ÷ disc diameter — room for the
+                           // hover scale so the circle never clips
       items: [
         { num: '01', x: 270,  y: 540, disc: true },
         { num: '02', x: 427,  y: 375 },
@@ -375,6 +389,8 @@
     + '--tint-intensity:' + CONFIG.circles.tintIntensity + ';'
     + '--tint-fade:' + CONFIG.circles.tintFadeMs + 'ms;'
     + '--disc-spin:' + CONFIG.nodes.discSpinS + 's;'
+    + '--disc-blur:' + CONFIG.nodes.discBlur + 'px;'
+    + '--disc-pad:' + CONFIG.nodes.discPad + ';'
     + '}';
   document.head.appendChild(cfgStyle);
 
@@ -453,19 +469,24 @@
       class: 'node' + (n.veiled ? ' veiled' : '') + (n.disc ? ' disc-node' : ''),
     });
     if (n.disc) {
-      // Rotating CMY disc: foreignObject in artboard coordinates, HTML
-      // divs inside (outer = hover scale, inner = spin). Clicks on the
-      // divs bubble up to this group's handler.
+      // Rotating CMY disc. The foreignObject is PADDED (discPad× the disc
+      // diameter) and centred on the node, so the hover scale has headroom
+      // and the circle never clips against the fO bounds. Inner divs:
+      // outer = centre + padding, wrap = hover scale + circular clip,
+      // disc = spin. Clicks bubble to this group's handler.
+      const foR = CONFIG.nodes.r * CONFIG.nodes.discPad;  // padded half-size
       const fo = svgEl('foreignObject', {
-        x: n.x - CONFIG.nodes.r, y: n.y - CONFIG.nodes.r,
-        width: CONFIG.nodes.r * 2, height: CONFIG.nodes.r * 2,
+        x: n.x - foR, y: n.y - foR, width: foR * 2, height: foR * 2,
       });
+      const outer = document.createElement('div');
+      outer.className = 'disc-outer';
       const wrap = document.createElement('div');
       wrap.className = 'disc-wrap';
       const disc = document.createElement('div');
       disc.className = 'disc';
       wrap.appendChild(disc);
-      fo.appendChild(wrap);
+      outer.appendChild(wrap);
+      fo.appendChild(outer);
       g.appendChild(fo);
       // Reliable hit target on top of the visual-only foreignObject.
       g.appendChild(svgEl('circle', {
