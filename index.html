@@ -62,6 +62,9 @@
     width: 100vw;
     height: 100vh;
     display: block;
+    /* Frame + horizontal guides overshoot the artboard to reach the real
+       viewport edges on any aspect ratio — let them render past the viewBox. */
+    overflow: visible;
   }
 
   /* Hairlines: geometry scales with the viewBox, but non-scaling-stroke
@@ -140,30 +143,28 @@
     transition: fill 0.45s ease;
   }
 
-  /* === Theme toggle — discreet, typographic, top-right corner ============ */
+  /* === Theme toggle — SVG group, top-right margin, scales with the board = */
+  /* Same type treatment as .title, but interactive. Lives inside #homepage's
+     SVG, so the router hides it automatically when a chapter is active.
+     The group pairs the text with an invisible hit rect — spaced-out SVG
+     glyphs alone leave click-dead gaps between letters. */
   #themeToggle {
-    position: fixed;
-    top: 1.6vh;
-    right: 1vw;
-    z-index: 20;
-    border: none;
-    background: none;
-    color: var(--fg-dim);
+    fill: var(--fg-dim);
     font-family: 'Space Mono', monospace;
-    font-size: max(0.57vw, 9px);
-    letter-spacing: 0.1em;
-    padding: 0.5em 0.4em 0.5em 0.9em;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
     cursor: pointer;
+    pointer-events: all;
     user-select: none;
-    transition: color 0.3s ease;
+    transition: fill 0.3s ease;
   }
-  #themeToggle:hover { color: var(--fg); }
-  body.chapter-active #themeToggle { display: none; }
+  #themeToggle .toggle-hit { fill: transparent; stroke: none; }
+  #themeToggle:hover { fill: var(--fg); }
+  #themeToggle:focus { outline: none; }
 </style>
 </head>
 <body>
-
-<button id="themeToggle" aria-label="Cambiar tema">○ LUZ</button>
 
 <div id="homepage">
   <svg id="board" xmlns="http://www.w3.org/2000/svg"
@@ -189,7 +190,11 @@
 
     // All geometric lines + circle outlines (light theme; dark in CSS).
     // Width is in SCREEN px (non-scaling-stroke keeps hairlines crisp).
-    line: { color: '#D9D9D9', width: 1 },
+    // overshoot: how far (artboard units) the frame lines and horizontal
+    // guides extend past the artboard on each side, so they always reach
+    // the real viewport edges. 5000 covers even extreme aspect ratios
+    // (a portrait phone letterboxes ~1540 units; ultrawides ~2300).
+    line: { color: '#D9D9D9', width: 1, overshoot: 5000 },
 
     // Three overlapping circles — additive RGB light primaries. Tangent to
     // the frame: top/bottom lines vertically, left/right lines horizontally.
@@ -239,9 +244,13 @@
     titles: {
       text: 'COLOR IN MOTION',
       fontSize: 11,
-      top:    { x: 120,  y: 46 },    // reads normally, anchored start
-      bottom: { x: 1800, y: 1038 },  // rotated 180° around its anchor
+      top:    { x: 120,  y: 45 },    // reads normally, anchored start
+      bottom: { x: 1799, y: 1038 },  // rotated 180° around its anchor
     },
+
+    // Theme toggle — SVG text, top-right margin, anchored end.
+    // Keep y equal to titles.top.y so it stays aligned with the title.
+    toggle: { x: 1800, y: 46 },
   };
 
   // =====================================================================
@@ -294,10 +303,12 @@
   }
   board.appendChild(tintGroup);
 
-  // --- 6 horizontal guide lines (full artboard width) ---------------------
+  // --- 6 horizontal guide lines ("infinite": overshoot both sides so they
+  //     reach the real viewport edges on any aspect ratio) -----------------
+  const OS = CONFIG.line.overshoot;
   for (const y of CONFIG.guides.horizontal) {
     board.appendChild(svgEl('line', {
-      class: 'guide', x1: 0, y1: y, x2: CONFIG.artboard.w, y2: y,
+      class: 'guide', x1: -OS, y1: y, x2: CONFIG.artboard.w + OS, y2: y,
     }));
   }
 
@@ -318,11 +329,12 @@
     }));
   }
 
-  // --- Frame: 4 independent lines spanning the artboard, cross corners ----
-  board.appendChild(svgEl('line', { class: 'frame', x1: 0, y1: CONFIG.frame.top, x2: CONFIG.artboard.w, y2: CONFIG.frame.top }));
-  board.appendChild(svgEl('line', { class: 'frame', x1: 0, y1: CONFIG.frame.bottom, x2: CONFIG.artboard.w, y2: CONFIG.frame.bottom }));
-  board.appendChild(svgEl('line', { class: 'frame', x1: CONFIG.frame.left, y1: 0, x2: CONFIG.frame.left, y2: CONFIG.artboard.h }));
-  board.appendChild(svgEl('line', { class: 'frame', x1: CONFIG.frame.right, y1: 0, x2: CONFIG.frame.right, y2: CONFIG.artboard.h }));
+  // --- Frame: 4 "infinite" lines, cross corners — overshoot past the
+  //     artboard so they run edge-to-edge on any screen -------------------
+  board.appendChild(svgEl('line', { class: 'frame', x1: -OS, y1: CONFIG.frame.top, x2: CONFIG.artboard.w + OS, y2: CONFIG.frame.top }));
+  board.appendChild(svgEl('line', { class: 'frame', x1: -OS, y1: CONFIG.frame.bottom, x2: CONFIG.artboard.w + OS, y2: CONFIG.frame.bottom }));
+  board.appendChild(svgEl('line', { class: 'frame', x1: CONFIG.frame.left, y1: -OS, x2: CONFIG.frame.left, y2: CONFIG.artboard.h + OS }));
+  board.appendChild(svgEl('line', { class: 'frame', x1: CONFIG.frame.right, y1: -OS, x2: CONFIG.frame.right, y2: CONFIG.artboard.h + OS }));
 
   // --- 11 nodes: SVG groups, click handlers attached directly -------------
   const nodeGroup = svgEl('g', { class: 'nodes' });
@@ -362,20 +374,43 @@
     'aria-hidden': 'true',
   }, CONFIG.titles.text));
 
+  // --- Theme toggle: SVG group in the top-right margin, aligned with the
+  //     top title and scaling with the composition. The invisible rect is
+  //     the real click target (text glyphs alone have hit-test gaps). ------
+  const toggle = svgEl('g', {
+    id: 'themeToggle',
+    role: 'button', tabindex: '0', 'aria-label': 'Cambiar tema',
+  });
+  toggle.appendChild(svgEl('rect', {
+    class: 'toggle-hit',
+    x: CONFIG.toggle.x - 130, y: CONFIG.toggle.y - 16,
+    width: 140, height: 24,
+  }));
+  const toggleText = svgEl('text', {
+    x: CONFIG.toggle.x, y: CONFIG.toggle.y,
+    'font-size': CONFIG.titles.fontSize,
+    'text-anchor': 'end',
+  });
+  toggle.appendChild(toggleText);
+  board.appendChild(toggle);
+
   // =====================================================================
   // Theme — light / dark, persisted in localStorage (shared with chapters).
   // =====================================================================
   const rootEl = document.documentElement;
   if (localStorage.getItem('beLight.theme') === 'dark') rootEl.classList.add('dark');
 
-  const toggle = document.getElementById('themeToggle');
   function syncToggle() {
-    toggle.textContent = rootEl.classList.contains('dark') ? '● OSC' : '○ LUZ';
+    toggleText.textContent = rootEl.classList.contains('dark') ? '● OSC' : '○ LUZ';
   }
-  toggle.addEventListener('click', () => {
+  function flipTheme() {
     rootEl.classList.toggle('dark');
     localStorage.setItem('beLight.theme', rootEl.classList.contains('dark') ? 'dark' : 'light');
     syncToggle();
+  }
+  toggle.addEventListener('click', flipTheme);
+  toggle.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipTheme(); }
   });
   syncToggle();
 </script>
