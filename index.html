@@ -148,6 +148,43 @@
   .node.veiled { opacity: var(--veiled-opacity); cursor: default; }
   .node.veiled:hover circle { transform: none; }
 
+  /* === Node 01 — rotating CMY disc ======================================= */
+  /* A foreignObject inside the node group: it lives in artboard coordinates
+     so it scales with the viewBox like everything else. Outer wrap handles
+     the hover scale, inner div spins — the SVG "01" label above stays static. */
+  /* The foreignObject is visual only — hit-testing inside a transformed,
+     viewBox-scaled foreignObject is unreliable (Chromium/Safari), so an
+     invisible SVG circle on top is the real click/hover target. */
+  .disc-node foreignObject { pointer-events: none; }
+  .disc-node .disc-hit { fill: transparent; stroke: none; }
+  .disc-wrap {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;   /* clip the square spinning div to the disc shape */
+    transform-origin: center;
+    transition: transform 0.25s ease;
+  }
+  .node:hover .disc-wrap,
+  .node:focus-visible .disc-wrap { transform: scale(1.1); }
+  .disc {
+    /* Oversized + negative margin: the blur's soft outer edge falls outside
+       the wrap's circular clip, so the disc rim stays sharp. Blur is in
+       artboard units — it scales with the viewBox like everything else. */
+    width: 140%;
+    height: 140%;
+    margin: -20%;
+    border-radius: 50%;
+    background: conic-gradient(#00FFFF, #FF00FF, #FFFF00, #00FFFF);
+    filter: blur(var(--disc-blur, 10px));
+    animation: discSpin var(--disc-spin, 6s) linear infinite;
+  }
+  @keyframes discSpin { to { transform: rotate(360deg); } }
+  .node.disc-node text { fill: #ffffff; }
+  @media (prefers-reduced-motion: reduce) {
+    .disc { animation: none; }
+  }
+
   /* === Titles — inside the SVG, in artboard coordinates =================== */
   .title {
     fill: var(--fg-dim);
@@ -296,8 +333,9 @@
       fill: '#A0A0A0',     // light theme; dark theme in CSS
       veiledOpacity: 0.35,
       fontSize: 14,
+      discSpinS: 6,        // seconds per full turn of node 01's CMY disc
       items: [
-        { num: '01', x: 270,  y: 540 },
+        { num: '01', x: 270,  y: 540, disc: true },
         { num: '02', x: 427,  y: 375 },
         { num: '03', x: 427,  y: 706 },
         { num: '04', x: 826,  y: 375 },
@@ -336,6 +374,7 @@
     + '--veiled-opacity:' + CONFIG.nodes.veiledOpacity + ';'
     + '--tint-intensity:' + CONFIG.circles.tintIntensity + ';'
     + '--tint-fade:' + CONFIG.circles.tintFadeMs + 'ms;'
+    + '--disc-spin:' + CONFIG.nodes.discSpinS + 's;'
     + '}';
   document.head.appendChild(cfgStyle);
 
@@ -410,8 +449,31 @@
   // --- 11 nodes: SVG groups, click handlers attached directly -------------
   const nodeGroup = svgEl('g', { class: 'nodes' });
   for (const n of CONFIG.nodes.items) {
-    const g = svgEl('g', { class: 'node' + (n.veiled ? ' veiled' : '') });
-    g.appendChild(svgEl('circle', { cx: n.x, cy: n.y, r: CONFIG.nodes.r }));
+    const g = svgEl('g', {
+      class: 'node' + (n.veiled ? ' veiled' : '') + (n.disc ? ' disc-node' : ''),
+    });
+    if (n.disc) {
+      // Rotating CMY disc: foreignObject in artboard coordinates, HTML
+      // divs inside (outer = hover scale, inner = spin). Clicks on the
+      // divs bubble up to this group's handler.
+      const fo = svgEl('foreignObject', {
+        x: n.x - CONFIG.nodes.r, y: n.y - CONFIG.nodes.r,
+        width: CONFIG.nodes.r * 2, height: CONFIG.nodes.r * 2,
+      });
+      const wrap = document.createElement('div');
+      wrap.className = 'disc-wrap';
+      const disc = document.createElement('div');
+      disc.className = 'disc';
+      wrap.appendChild(disc);
+      fo.appendChild(wrap);
+      g.appendChild(fo);
+      // Reliable hit target on top of the visual-only foreignObject.
+      g.appendChild(svgEl('circle', {
+        class: 'disc-hit', cx: n.x, cy: n.y, r: CONFIG.nodes.r,
+      }));
+    } else {
+      g.appendChild(svgEl('circle', { cx: n.x, cy: n.y, r: CONFIG.nodes.r }));
+    }
     g.appendChild(svgEl('text', {
       x: n.x, y: n.y, 'font-size': CONFIG.nodes.fontSize,
     }, n.num));
