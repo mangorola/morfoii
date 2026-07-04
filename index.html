@@ -162,6 +162,55 @@
   #themeToggle .toggle-hit { fill: transparent; stroke: none; }
   #themeToggle:hover { fill: var(--fg); }
   #themeToggle:focus { outline: none; }
+
+  /* === Portrait overlay — the experience is landscape-only on mobile ===== */
+  /* Hidden by default; the orientation media query below shows it whenever
+     the viewport is taller than wide, covering homepage AND chapters. */
+  #rotateOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--bg);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 34px;
+    text-align: center;
+    transition: background 0.45s ease;
+  }
+  #rotateOverlay p {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    line-height: 2.4;
+    color: var(--fg-dim);
+    max-width: 24em;
+    padding: 0 24px;
+    transition: color 0.45s ease;
+  }
+  /* CSS-only rotation hint: a phone outline that tips to landscape. */
+  .rotate-icon {
+    width: 26px;
+    height: 44px;
+    border: 1px solid var(--fg-dim);
+    border-radius: 5px;
+    animation: rotateHint 2.8s ease-in-out infinite;
+    transition: border-color 0.45s ease;
+  }
+  @keyframes rotateHint {
+    0%, 18%   { transform: rotate(0deg); }
+    45%, 70%  { transform: rotate(90deg); }
+    95%, 100% { transform: rotate(0deg); }
+  }
+  @media (orientation: portrait) {
+    #rotateOverlay { display: flex; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rotate-icon { animation: none; transform: rotate(90deg); }
+  }
 </style>
 </head>
 <body>
@@ -173,6 +222,11 @@
 </div>
 
 <div id="chapter-container"></div>
+
+<div id="rotateOverlay" role="status">
+  <div class="rotate-icon" aria-hidden="true"></div>
+  <p>Rotá tu dispositivo para ver la experiencia</p>
+</div>
 
 <script>
   // =====================================================================
