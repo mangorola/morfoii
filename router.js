@@ -24,7 +24,7 @@
   function renderFallback(container, num) {
     container.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:center;height:100vh;'
-      + 'font-family:\'Space Grotesk\',sans-serif;background:var(--bg,#f4f4f1);color:var(--fg,#1a1a1a);">'
+      + 'font-family:\'Space Grotesk\',sans-serif;background:var(--bg,#fffff);color:var(--fg,#1a1a1a);">'
       + '<div style="text-align:center;">'
       + '<p style="font-size:13px;font-weight:300;letter-spacing:0.3em;color:var(--fg-dim,rgba(0,0,0,0.4));margin-bottom:18px;">CAPÍTULO ' + num + '</p>'
       + '<p style="font-size:11px;font-weight:300;letter-spacing:0.15em;color:var(--fg-faint,rgba(0,0,0,0.25));">PRÓXIMAMENTE</p>'
