@@ -22,6 +22,13 @@
     '11': 'cap-11.html',
   };
 
+  // Chapters exempt from the portrait rotate-overlay: sensor-driven
+  // experiences where the phone lives in the hand at any angle (11 —
+  // IRIDESCENCE reads the gyroscope; forcing landscape would fight the
+  // very gesture the chapter asks for). Flagged on <body> so the
+  // overlay's CSS in index.html can stand down.
+  const orientationFree = { '11': true };
+
   function renderFallback(container, num) {
     container.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:center;height:100vh;'
@@ -65,7 +72,7 @@
       homepage.style.display = '';
       container.style.display = 'none';
       container.innerHTML = '';
-      document.body.classList.remove('chapter-active');
+      document.body.classList.remove('chapter-active', 'orientation-free');
       return;
     }
 
@@ -75,6 +82,7 @@
       document.body.classList.add('chapter-active');
 
       const num = hash.replace('#capitulo-', '');
+      document.body.classList.toggle('orientation-free', orientationFree[num] === true);
       const file = chapterMap[num];
       if (file) loadChapter(container, file, num);
       else renderFallback(container, num);

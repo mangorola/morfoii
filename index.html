@@ -244,7 +244,9 @@
 
   /* === Portrait overlay — the experience is landscape-only on mobile ===== */
   /* Hidden by default; the orientation media query below shows it whenever
-     the viewport is taller than wide, covering homepage AND chapters. */
+     the viewport is taller than wide, covering homepage AND chapters —
+     except chapters the router marks orientation-free on <body> (sensor
+     chapters like 11, which live in the hand at any angle). */
   #rotateOverlay {
     display: none;
     position: fixed;
@@ -286,6 +288,7 @@
   }
   @media (orientation: portrait) {
     #rotateOverlay { display: flex; }
+    body.orientation-free #rotateOverlay { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     .rotate-icon { animation: none; transform: rotate(90deg); }
