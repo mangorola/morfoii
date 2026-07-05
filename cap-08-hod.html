@@ -687,13 +687,18 @@
   // In that mode the whole grid is opaque colour and a circular window
   // around the cursor REVEALS the image: per cell we write the weight
   // --w, and the .hover-on CSS turns it into opacity 1-w (transparent at
-  // the centre, opaque at the radius edge). Throttled to CONFIG.hoverFps;
-  // weights fade back through the cells' opacity transition.
+  // the centre, opaque at the radius edge). Throttled to CONFIG.hoverFps.
+  //
+  // A CLICK is a STAMP: the cells under the radius toggle into a persistent
+  // `stamped` set (revealed even after the mouse leaves; click again to
+  // erase). A cell's reveal weight is max(stamp, live brush), so stamps and
+  // the moving brush combine — the brush never stops.
   // =====================================================================
   const stageEl = document.getElementById('stage');
   const HOVER_MS = 1000 / CONFIG.hoverFps;
   let hoverMode = false;       // OFF by default — sliders rule the grid
-  let brushPrev = new Map();   // cell index → last applied weight
+  const stamped = new Set();   // cell indices locked as permanently revealed
+  let brushPrev = new Map();   // cell index → live brush weight (this radius)
   let brushTimer = null, brushLast = 0, brushEvt = null;
 
   function brushWeight(d) {
@@ -705,41 +710,81 @@
     return typeof f === 'number' ? Math.pow(t, f) : smooth01(t);
   }
 
-  function applyBrush(gx, gy) {
+  // Cells within the brush radius of (gx,gy) → Map(cellIndex → weight),
+  // weight ~1 at the centre falling to 0 at the edge (CONFIG.hoverFalloff).
+  function radiusWeights(gx, gy) {
     const R = CONFIG.hoverRadius;
-    const next = new Map();
+    const m = new Map();
     const c0 = Math.max(0, Math.floor(gx - R)), c1 = Math.min(COLS - 1, Math.ceil(gx + R));
     const r0 = Math.max(0, Math.floor(gy - R)), r1 = Math.min(ROWS - 1, Math.ceil(gy + R));
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
         const w = brushWeight(Math.hypot(c + 0.5 - gx, r + 0.5 - gy));
-        if (w > 0.001) next.set(r * COLS + c, w);
+        if (w > 0.001) m.set(r * COLS + c, w);
       }
     }
+    return m;
+  }
+
+  // Write (or clear) a cell's reveal weight on both colour plates.
+  function setCellW(i, w) {
+    if (w > 0) {
+      const v = w.toFixed(3);
+      aCells[i].style.setProperty('--w', v);
+      bCells[i].style.setProperty('--w', v);
+    } else {
+      aCells[i].style.removeProperty('--w');
+      bCells[i].style.removeProperty('--w');
+    }
+  }
+
+  // Move the live radius to (gx,gy). Cells leaving the radius fall back to
+  // their stamped state (1 if stamped, else covered); cells inside show
+  // max(brush, stamp) — a stamped cell stays fully revealed under the brush.
+  function applyBrush(gx, gy) {
+    const next = radiusWeights(gx, gy);
     brushPrev.forEach(function (w, i) {
-      if (!next.has(i)) {
-        aCells[i].style.removeProperty('--w');
-        bCells[i].style.removeProperty('--w');
-      }
+      if (!next.has(i)) setCellW(i, stamped.has(i) ? 1 : 0);
     });
     next.forEach(function (w, i) {
-      if (brushPrev.get(i) !== w) {
-        const v = w.toFixed(3);
-        aCells[i].style.setProperty('--w', v);
-        bCells[i].style.setProperty('--w', v);
-      }
+      setCellW(i, stamped.has(i) ? 1 : w);
     });
     brushPrev = next;
   }
 
+  // Clear only the LIVE brush (e.g. on pointerleave). Stamps persist.
   function clearBrush() {
     if (brushTimer) { clearTimeout(brushTimer); brushTimer = null; }
     brushEvt = null;
-    brushPrev.forEach(function (w, i) {
-      aCells[i].style.removeProperty('--w');
-      bCells[i].style.removeProperty('--w');
-    });
+    brushPrev.forEach(function (w, i) { setCellW(i, stamped.has(i) ? 1 : 0); });
     brushPrev = new Map();
+  }
+
+  // Wipe the live brush AND every stamp (when hover mode is turned off,
+  // so each session starts clean).
+  function resetReveal() {
+    if (brushTimer) { clearTimeout(brushTimer); brushTimer = null; }
+    brushEvt = null;
+    brushPrev.forEach(function (w, i) { setCellW(i, 0); });
+    stamped.forEach(function (i) { setCellW(i, 0); });
+    brushPrev = new Map();
+    stamped.clear();
+  }
+
+  // Click stamp — toggle every cell in the radius. Newly stamped cells lock
+  // transparent; un-stamped cells revert to the live brush (or cover).
+  function stampAt(gx, gy) {
+    radiusWeights(gx, gy).forEach(function (w, i) {
+      if (stamped.has(i)) stamped.delete(i); else stamped.add(i);
+      setCellW(i, stamped.has(i) ? 1 : (brushPrev.get(i) || 0));
+    });
+  }
+
+  // Pointer position → grid coords (from the live rect).
+  function eventToGrid(e) {
+    const rect = stageEl.getBoundingClientRect();
+    return { gx: (e.clientX - rect.left) / rect.width * COLS,
+             gy: (e.clientY - rect.top) / rect.height * ROWS };
   }
 
   function flushBrush() {
@@ -748,33 +793,46 @@
     if (!e) return;
     brushLast = performance.now();
     if (panel.contains(e.target)) { clearBrush(); return; }   // over the tools
-    const rect = stageEl.getBoundingClientRect();
-    const gx = (e.clientX - rect.left) / rect.width * COLS;
-    const gy = (e.clientY - rect.top) / rect.height * ROWS;
-    applyBrush(gx, gy);
+    const p = eventToGrid(e);
+    applyBrush(p.gx, p.gy);
   }
 
   stageEl.addEventListener('pointermove', function (e) {
-    if (!hoverMode) return;
+    if (!hoverMode) return;             // brush follows the cursor whenever ON
     brushEvt = e;
     const wait = brushLast + HOVER_MS - performance.now();
     if (wait <= 0) flushBrush();
     else if (!brushTimer) brushTimer = setTimeout(flushBrush, wait);
   });
+  // Leaving the grid clears the live brush; stamped reveals stay put.
   stageEl.addEventListener('pointerleave', clearBrush);
   stageEl.addEventListener('pointercancel', clearBrush);
 
-  // Hover toggle — OFF (default): sliders control the whole grid, no
-  // brush. ON: the grid fills with opaque colour and the brush reveals
-  // the image around the cursor.
+  // Click = STAMP. Sync the live radius to the click point, then toggle the
+  // stamped state of those cells (click an already-stamped area to erase).
+  // The hover brush keeps working the whole time.
+  stageEl.addEventListener('click', function (e) {
+    if (!hoverMode) return;
+    if (panel.contains(e.target) || placeholder.contains(e.target)) return;
+    const p = eventToGrid(e);
+    applyBrush(p.gx, p.gy);
+    stampAt(p.gx, p.gy);
+  });
+
+  // Hover toggle — OFF (default): sliders control the whole grid, no brush.
+  // ON: the grid fills with opaque colour; the brush reveals the image
+  // around the cursor and clicks stamp permanent reveals.
   const hoverBtn = document.getElementById('hoverBtn');
+  function updateHoverLabel() {
+    hoverBtn.textContent = hoverMode ? 'Hover: On' : 'Hover: Off';
+    hoverBtn.classList.toggle('active', hoverMode);
+    hoverBtn.setAttribute('aria-pressed', String(hoverMode));
+  }
   function setHover(on) {
     hoverMode = on;
     stageEl.classList.toggle('hover-on', on);
-    hoverBtn.classList.toggle('active', on);
-    hoverBtn.setAttribute('aria-pressed', String(on));
-    hoverBtn.textContent = on ? 'Hover: On' : 'Hover: Off';
-    if (!on) clearBrush();
+    if (!on) resetReveal();            // turning hover off wipes brush + stamps
+    updateHoverLabel();
   }
   hoverBtn.addEventListener('click', function () { setHover(!hoverMode); });
   setHover(CONFIG.hoverDefaultOn);
