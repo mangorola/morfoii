@@ -151,22 +151,22 @@
   #layerImg .cell.alt { background-color: var(--cell-alt); }
 
   /* Layers 2 & 3 — colour plates. Cells are transparent unless .on.
-     Opacity lives on the CELL (not the layer): the slider value is
-     lifted toward 1 by the hover-brush weight --w (0 outside the brush),
-     so a brushed block can go fully opaque without the layer capping it.
-     The short opacity transition makes the brush trail liquid. */
+     Opacity lives on the CELL (not the layer) so the brush can drive
+     individual cells. Two modes:
+       • default (hover OFF): each plate's opacity = its slider value.
+       • hover ON (.hover-on on #stage): plates go FULLY opaque, and the
+         brush weight --w carves a transparent window at the cursor —
+         opacity 0 at the centre → 1 at the radius edge — revealing the
+         image beneath. Non-brushed cells stay opaque (--w defaults 0).
+     The short opacity transition keeps the reveal liquid. */
   #layerA .cell, #layerB .cell {
     background-color: transparent;
     transition: background-color 0.25s ease, opacity 0.12s linear;
   }
-  #layerA .cell.on {
-    background-color: var(--color-a);
-    opacity: calc(var(--op-a) + (1 - var(--op-a)) * var(--w, 0));
-  }
-  #layerB .cell.on {
-    background-color: var(--color-b);
-    opacity: calc(var(--op-b) + (1 - var(--op-b)) * var(--w, 0));
-  }
+  #layerA .cell.on { background-color: var(--color-a); opacity: var(--op-a); }
+  #layerB .cell.on { background-color: var(--color-b); opacity: var(--op-b); }
+  #stage.hover-on #layerA .cell.on,
+  #stage.hover-on #layerB .cell.on { opacity: calc(1 - var(--w, 0)); }
 
   /* === Placeholder =========================================== */
   #placeholder {
@@ -228,9 +228,18 @@
     border: 1px solid var(--fg-dim);
     padding: 14px 26px;
     cursor: pointer;
-    transition: color 0.3s ease, border-color 0.3s ease;
+    transition: color 0.3s ease, border-color 0.3s ease, background 0.3s ease;
   }
   .btn:hover, .btn:focus-visible { color: var(--fg); border-color: var(--fg); }
+  /* Active toggle (hover mode ON) — inverted fill so the engaged state
+     reads clearly, distinct from the transient :hover feedback. */
+  .btn.active,
+  .btn.active:hover,
+  .btn.active:focus-visible {
+    color: var(--bg);
+    background: var(--fg);
+    border-color: var(--fg);
+  }
 
   /* Rows share identical group widths, so the three slider columns of
      the A and B rows align, and row 1's IMG slider closes the same
@@ -346,6 +355,7 @@
         <div class="row-actions">
           <button class="btn" id="uploadBtn"  type="button">Upload image</button>
           <button class="btn" id="shuffleBtn" type="button">Shuffle</button>
+          <button class="btn" id="hoverBtn"   type="button" aria-pressed="false">Hover: Off</button>
         </div>
         <div class="slider-group">
           <label for="opImg">IMG</label>
@@ -418,6 +428,7 @@
                              // false = hard edge; a number = falloff
                              // exponent (higher = tighter core)
     hoverFps: 30,            // hover recalcs per second (throttle)
+    hoverDefaultOn: false,   // initial state of the HOVER toggle button
     clusterPeriod: { min: 0.8, max: 12 },  // noise period in cells at
                              // cluster 0 → 1 (sub-cell = pure scatter)
     labelA: 'AZUL',          // slider label for layer 2
@@ -672,15 +683,16 @@
   document.getElementById('shuffleBtn').addEventListener('click', shuffle);
 
   // =====================================================================
-  // Hover brush — a circular window around the cursor where the colour
-  // plates go fully opaque (pure colour, image hidden), whatever the
-  // sliders say. Per cell we only write the weight --w; the CSS calc
-  // blends it with the slider value, so slider changes stay live inside
-  // the brush too. Throttled to CONFIG.hoverFps; weights fade back
-  // through the cells' opacity transition.
+  // Hover brush — only live when hover mode is ON (see the toggle below).
+  // In that mode the whole grid is opaque colour and a circular window
+  // around the cursor REVEALS the image: per cell we write the weight
+  // --w, and the .hover-on CSS turns it into opacity 1-w (transparent at
+  // the centre, opaque at the radius edge). Throttled to CONFIG.hoverFps;
+  // weights fade back through the cells' opacity transition.
   // =====================================================================
   const stageEl = document.getElementById('stage');
   const HOVER_MS = 1000 / CONFIG.hoverFps;
+  let hoverMode = false;       // OFF by default — sliders rule the grid
   let brushPrev = new Map();   // cell index → last applied weight
   let brushTimer = null, brushLast = 0, brushEvt = null;
 
@@ -743,6 +755,7 @@
   }
 
   stageEl.addEventListener('pointermove', function (e) {
+    if (!hoverMode) return;
     brushEvt = e;
     const wait = brushLast + HOVER_MS - performance.now();
     if (wait <= 0) flushBrush();
@@ -750,6 +763,21 @@
   });
   stageEl.addEventListener('pointerleave', clearBrush);
   stageEl.addEventListener('pointercancel', clearBrush);
+
+  // Hover toggle — OFF (default): sliders control the whole grid, no
+  // brush. ON: the grid fills with opaque colour and the brush reveals
+  // the image around the cursor.
+  const hoverBtn = document.getElementById('hoverBtn');
+  function setHover(on) {
+    hoverMode = on;
+    stageEl.classList.toggle('hover-on', on);
+    hoverBtn.classList.toggle('active', on);
+    hoverBtn.setAttribute('aria-pressed', String(on));
+    hoverBtn.textContent = on ? 'Hover: On' : 'Hover: Off';
+    if (!on) clearBrush();
+  }
+  hoverBtn.addEventListener('click', function () { setHover(!hoverMode); });
+  setHover(CONFIG.hoverDefaultOn);
 
   // =====================================================================
   // Back to index — hash change on the parent document, never a reload.
