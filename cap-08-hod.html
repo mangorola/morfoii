@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 — HOD</title>
+
+<!-- Theme before first paint: same key + class contract as index.html. -->
+<script>
+  try {
+    if (localStorage.getItem('beLight.theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
+
+  /* Theme tokens — same names/values as index.html so both documents flip
+     together. Composition tokens (--op-*, --color-*, --cols/--rows) are
+     injected from CONFIG at boot; the values here are matching fallbacks. */
+  :root {
+    --bg: #FFFFFF;
+    --fg: #1a1a1a;
+    --fg-dim: rgba(26, 26, 26, 0.45);
+    --fg-faint: rgba(26, 26, 26, 0.22);
+    --line: #5E5E5E;
+    --line-w: 0.9px;
+    --cell-base: #F1F1F1;   /* placeholder checker, tone A */
+    --cell-alt:  #E9E9E9;   /* placeholder checker, tone B */
+    --panel-bg: rgba(255, 255, 255, 0.9);
+    --cols: 24;
+    --rows: 16;
+    --op-img: 1;
+    --op-a: 0.85;
+    --op-b: 0.85;
+    --color-a: #00338A;
+    --color-b: #FF00FF;
+  }
+  :root.dark {
+    --bg: #000000;
+    --fg: #ffffff;
+    --fg-dim: rgba(245, 245, 240, 0.5);
+    --fg-faint: rgba(245, 245, 240, 0.25);
+    --line: #2E2E2E;
+    --cell-base: #141414;
+    --cell-alt:  #1B1B1B;
+    --panel-bg: rgba(0, 0, 0, 0.85);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100vh;   /* fallback for older browsers */
+    height: 100dvh;  /* modern: excludes mobile browser chrome */
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Space Grotesk', sans-serif;
+    transition: background 0.45s ease, color 0.45s ease;
+  }
+
+  /* === SVG board — frame lines + margin type ============================= */
+  /* Same coordinate contract as index.html: viewBox 0 0 1920 1080 with
+     "meet" scaling. Only the 4 frame lines here (no circles, no guides,
+     no nodes). The board sits ON TOP of the composition so the hairlines
+     stay crisp over the grid; pointer events pass through except on the
+     interactive .ctrl groups. */
+  #board {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: block;
+    overflow: visible;   /* frame lines overshoot the artboard to the viewport edges */
+    z-index: 10;
+    pointer-events: none;
+  }
+  #board .frame {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: var(--line-w);
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.45s ease;
+  }
+  #board text {
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .label-num  { fill: var(--fg-dim); transition: fill 0.45s ease; }
+  .label-name { fill: var(--fg);     transition: fill 0.45s ease; }
+  .ctrl {
+    cursor: pointer;
+    pointer-events: all;
+    fill: var(--fg-dim);
+    transition: fill 0.3s ease;
+  }
+  .ctrl:hover, .ctrl:focus-visible { fill: var(--fg); }
+  .ctrl:focus { outline: none; }
+  .ctrl .hit { fill: transparent; stroke: none; }
+
+  /* === Artboard — HTML twin of the SVG coordinate system ================= */
+  /* A fixed 1920×1080 div, centred and scaled by JS with the same
+     min(vw/1920, vh/1080) math as the SVG's "xMidYMid meet". Everything
+     inside uses raw artboard pixels, so the grid can never drift from
+     the frame drawn in the SVG. */
+  #artboard {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 1920px;
+    height: 1080px;
+    transform: translate(-50%, -50%) scale(1);
+    z-index: 1;
+  }
+
+  /* Inner stage: the frame rectangle. Clips the tools panel slide. */
+  #stage {
+    position: absolute;
+    left: 80px;
+    top: 80px;
+    width: 1760px;
+    height: 920px;
+    overflow: hidden;
+    background: var(--bg);
+    transition: background 0.45s ease;
+  }
+
+  /* === The three stacked grids ========================================== */
+  .layer {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--cols), 1fr);
+    grid-template-rows: repeat(var(--rows), 1fr);
+  }
+  #layerImg { opacity: var(--op-img); }
+  #layerA   { opacity: var(--op-a); }
+  #layerB   { opacity: var(--op-b); }
+
+  /* Layer 1 — image fragments. Before upload the cells form a subtle
+     neutral checker; after upload each cell shows its crop of the image. */
+  #layerImg .cell {
+    background-color: var(--cell-base);
+    background-repeat: no-repeat;
+    transition: background-color 0.45s ease;
+  }
+  #layerImg .cell.alt { background-color: var(--cell-alt); }
+
+  /* Layers 2 & 3 — colour plates. Cells are transparent unless .on. */
+  #layerA .cell, #layerB .cell {
+    background-color: transparent;
+    transition: background-color 0.25s ease;
+  }
+  #layerA .cell.on { background-color: var(--color-a); }
+  #layerB .cell.on { background-color: var(--color-b); }
+
+  /* === Placeholder =========================================== */
+  #placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  #placeholder button {
+    pointer-events: auto;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    background: var(--bg);
+    border: none;
+    padding: 20px 34px;
+    cursor: pointer;
+    transition: color 0.3s ease, background 0.45s ease;
+  }
+  #placeholder button:hover,
+  #placeholder button:focus-visible { color: var(--fg); }
+
+  /* === Tools panel — slides up from the frame's bottom line ============= */
+  #panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--panel-h, 170px);
+    display: flex;
+    align-items: center;
+    gap: 56px;
+    padding: 0 56px;
+    background: var(--panel-bg);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line);
+    transform: translateY(100%);
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                background 0.45s ease, border-color 0.45s ease;
+  }
+  #panel.open { transform: translateY(0); }
+
+  .btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--fg-dim);
+    background: none;
+    border: 1px solid var(--fg-dim);
+    padding: 14px 26px;
+    cursor: pointer;
+    transition: color 0.3s ease, border-color 0.3s ease;
+  }
+  .btn:hover, .btn:focus-visible { color: var(--fg); border-color: var(--fg); }
+
+  #sliders {
+    display: flex;
+    flex: 1;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 56px;
+  }
+  .slider-group { display: flex; align-items: center; gap: 18px; }
+  .slider-group label {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    width: 56px;
+    text-align: right;
+    transition: color 0.45s ease;
+  }
+
+  /* Custom range inputs: hairline track + small round thumb. */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 280px;
+    height: 24px;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]:focus { outline: none; }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 1px;
+    background: var(--fg-dim);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    margin-top: -6px;   /* centre the thumb on the 1px track */
+    border-radius: 50%;
+    background: var(--fg);
+    transition: background 0.45s ease;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 1px;
+    background: var(--fg-dim);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border: none;
+    border-radius: 50%;
+    background: var(--fg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #panel { transition: background 0.45s ease, border-color 0.45s ease; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Frame + margin type: homepage coordinate system, frame lines only. -->
+<svg id="board" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
+  <!-- 4 "infinite" frame lines, overshooting the artboard on every side -->
+  <line class="frame" x1="-1000" y1="80"    x2="3000" y2="80"/>
+  <line class="frame" x1="-1000" y1="1000"  x2="3000" y2="1000"/>
+  <line class="frame" x1="80"    y1="-1000" x2="80"   y2="2080"/>
+  <line class="frame" x1="1840"  y1="-1000" x2="1840" y2="2080"/>
+
+  <!-- Chapter label, top-left margin (same spot/type as the homepage title) -->
+  <text class="label-num"  x="120" y="45" font-size="11">08</text>
+  <text class="label-name" x="162" y="45" font-size="11">HOD</text>
+
+  <!-- Back to index, top-right margin -->
+  <g class="ctrl" id="backIndex" role="link" tabindex="0" aria-label="Volver al índice">
+    <rect class="hit" x="1670" y="30" width="140" height="24"/>
+    <text x="1800" y="46" font-size="11" text-anchor="end">← Índice</text>
+  </g>
+
+  <!-- Tools toggle, bottom margin, centred -->
+  <g class="ctrl" id="toolsToggle" role="button" tabindex="0"
+     aria-expanded="false" aria-label="Herramientas">
+    <rect class="hit" x="880" y="1022" width="160" height="38"/>
+    <text id="toolsToggleText" x="960" y="1045" font-size="11" text-anchor="middle">▲ TOOLS</text>
+  </g>
+</svg>
+
+<!-- Scaled HTML artboard: grid composition + tools panel. -->
+<div id="artboard">
+  <div id="stage">
+    <div class="layer" id="layerImg" aria-hidden="true"></div>
+    <div class="layer" id="layerA"   aria-hidden="true"></div>
+    <div class="layer" id="layerB"   aria-hidden="true"></div>
+
+    <div id="placeholder">
+      <button id="placeholderBtn" type="button">Upload an image to begin</button>
+    </div>
+
+    <div id="panel">
+      <button class="btn" id="uploadBtn"  type="button">Upload image</button>
+      <button class="btn" id="shuffleBtn" type="button">Shuffle</button>
+      <div id="sliders">
+        <div class="slider-group">
+          <label for="opImg">IMG</label>
+          <input type="range" id="opImg" min="0" max="1" step="0.01" value="1">
+        </div>
+        <div class="slider-group">
+          <label for="opA" id="labelA">AZUL</label>
+          <input type="range" id="opA" min="0" max="1" step="0.01" value="0.85">
+        </div>
+        <div class="slider-group">
+          <label for="opB" id="labelB">MAG</label>
+          <input type="range" id="opB" min="0" max="1" step="0.01" value="0.85">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" hidden>
+
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // CONFIG — all tunables. Coordinates are raw pixels on the 1920×1080
+  // artboard (same system as index.html); the viewBox / JS scale do all
+  // the responsive work.
+  // =====================================================================
+  const CONFIG = {
+    gridCols: 24,
+    gridRows: 16,
+    colorA: '#00338A',       // dark blue — layer 2 plate
+    colorB: '#FF00FF',       // magenta — layer 3 plate
+    coverageA: 0.45,         // 45% of cells covered by color A
+    coverageB: 0.40,         // 40% of cells covered by color B
+    defaultOpacityImg: 1.0,
+    defaultOpacityA: 0.85,
+    defaultOpacityB: 0.85,
+    labelA: 'AZUL',          // slider label for layer 2
+    labelB: 'MAG',           // slider label for layer 3
+    artboard: { w: 1920, h: 1080 },
+    stage: { x: 80, y: 80, w: 1760, h: 920 },   // frame rectangle
+    panelHeight: 170,        // tools panel, artboard px
+  };
+
+  // =====================================================================
+  // Push CONFIG into CSS custom properties (theme tokens stay in CSS).
+  // =====================================================================
+  const root = document.documentElement;
+  root.style.setProperty('--cols', CONFIG.gridCols);
+  root.style.setProperty('--rows', CONFIG.gridRows);
+  root.style.setProperty('--color-a', CONFIG.colorA);
+  root.style.setProperty('--color-b', CONFIG.colorB);
+  root.style.setProperty('--op-img', CONFIG.defaultOpacityImg);
+  root.style.setProperty('--op-a', CONFIG.defaultOpacityA);
+  root.style.setProperty('--op-b', CONFIG.defaultOpacityB);
+  root.style.setProperty('--panel-h', CONFIG.panelHeight + 'px');
+
+  // =====================================================================
+  // Artboard scale — mirrors the SVG's preserveAspectRatio="xMidYMid meet"
+  // so the HTML grid and the SVG frame share one coordinate system.
+  // =====================================================================
+  const artboard = document.getElementById('artboard');
+  function fit() {
+    const s = Math.min(
+      window.innerWidth / CONFIG.artboard.w,
+      window.innerHeight / CONFIG.artboard.h
+    );
+    if (s <= 0) return;   // viewport not laid out yet — wait for a real size
+    artboard.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  // The iframe can be attached before it has a size (no resize event fires
+  // for the zero→sized transition) — observe the root element as well.
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(fit).observe(document.documentElement);
+  }
+  fit();
+
+  // =====================================================================
+  // Build the three grids. One <div> per cell; the image layer's checker
+  // alternation is baked in as a class so the placeholder reads as a grid.
+  // =====================================================================
+  const COLS = CONFIG.gridCols, ROWS = CONFIG.gridRows, N = COLS * ROWS;
+  function buildCells(layerEl, checker) {
+    const cells = [];
+    const frag = document.createDocumentFragment();
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const d = document.createElement('div');
+        d.className = 'cell' + (checker && (r + c) % 2 ? ' alt' : '');
+        frag.appendChild(d);
+        cells.push(d);
+      }
+    }
+    layerEl.appendChild(frag);
+    return cells;
+  }
+  const imgCells = buildCells(document.getElementById('layerImg'), true);
+  const aCells   = buildCells(document.getElementById('layerA'), false);
+  const bCells   = buildCells(document.getElementById('layerB'), false);
+
+  // =====================================================================
+  // Random distribution — an exact-count uniform subset per plate
+  // (partial Fisher–Yates), re-drawn on every load and every shuffle.
+  // =====================================================================
+  function scatter(cells, coverage) {
+    const k = Math.max(0, Math.min(N, Math.round(N * coverage)));
+    const idx = new Array(N);
+    for (let i = 0; i < N; i++) idx[i] = i;
+    for (let i = 0; i < k; i++) {
+      const j = i + ((Math.random() * (N - i)) | 0);
+      const t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+    }
+    const on = new Set(idx.slice(0, k));
+    for (let i = 0; i < N; i++) cells[i].classList.toggle('on', on.has(i));
+  }
+  function shuffle() {
+    scatter(aCells, CONFIG.coverageA);
+    scatter(bCells, CONFIG.coverageB);
+  }
+  shuffle();
+
+  // =====================================================================
+  // Image upload — the image is cover-cropped to the stage, then each
+  // cell shows its slice via background-position (one image, 384 crops;
+  // no canvas). All math in artboard px: the CSS scale keeps it true.
+  // =====================================================================
+  const placeholder = document.getElementById('placeholder');
+  let currentURL = null;
+  let loadSeq = 0;
+
+  function applyImage(url, iw, ih) {
+    const SW = CONFIG.stage.w, SH = CONFIG.stage.h;
+    const s = Math.max(SW / iw, SH / ih);          // cover
+    const w = iw * s, h = ih * s;
+    const ox = (w - SW) / 2, oy = (h - SH) / 2;    // centred crop
+    const cw = SW / COLS, ch = SH / ROWS;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = imgCells[r * COLS + c];
+        cell.style.backgroundImage = 'url("' + url + '")';
+        cell.style.backgroundSize = w + 'px ' + h + 'px';
+        cell.style.backgroundPosition =
+          (-(ox + c * cw)) + 'px ' + (-(oy + r * ch)) + 'px';
+      }
+    }
+  }
+
+  function setImage(file) {
+    if (!file || file.type.indexOf('image/') !== 0) return;
+    const url = URL.createObjectURL(file);
+    const seq = ++loadSeq;
+    const probe = new Image();
+    probe.onload = function () {
+      if (seq !== loadSeq) { URL.revokeObjectURL(url); return; }  // superseded
+      applyImage(url, probe.naturalWidth, probe.naturalHeight);
+      if (currentURL) URL.revokeObjectURL(currentURL);
+      currentURL = url;
+      placeholder.style.display = 'none';
+    };
+    probe.onerror = function () { URL.revokeObjectURL(url); };
+    probe.src = url;
+  }
+
+  const fileInput = document.getElementById('fileInput');
+  fileInput.addEventListener('change', function () {
+    setImage(fileInput.files[0]);
+    fileInput.value = '';   // allow re-selecting the same file
+  });
+
+  // Drag & drop anywhere on the page loads the image too.
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files.length) {
+      setImage(e.dataTransfer.files[0]);
+    }
+  });
+
+  // =====================================================================
+  // Sliders — layer opacities live as CSS custom properties; dragging
+  // never touches the 1152 cells.
+  // =====================================================================
+  function bindSlider(id, prop, initial) {
+    const el = document.getElementById(id);
+    el.value = initial;
+    el.addEventListener('input', function () {
+      root.style.setProperty(prop, el.value);
+    });
+  }
+  bindSlider('opImg', '--op-img', CONFIG.defaultOpacityImg);
+  bindSlider('opA',   '--op-a',   CONFIG.defaultOpacityA);
+  bindSlider('opB',   '--op-b',   CONFIG.defaultOpacityB);
+  document.getElementById('labelA').textContent = CONFIG.labelA;
+  document.getElementById('labelB').textContent = CONFIG.labelB;
+
+  // =====================================================================
+  // Tools panel — closed by default; the toggle lives in the bottom
+  // margin and flips ▲/▼. Escape closes.
+  // =====================================================================
+  const panel = document.getElementById('panel');
+  const toolsToggle = document.getElementById('toolsToggle');
+  const toolsToggleText = document.getElementById('toolsToggleText');
+  let panelOpen = false;
+
+  function setPanel(open) {
+    panelOpen = open;
+    panel.classList.toggle('open', open);
+    toolsToggleText.textContent = open ? '▼ TOOLS' : '▲ TOOLS';
+    toolsToggle.setAttribute('aria-expanded', String(open));
+  }
+  toolsToggle.addEventListener('click', function () { setPanel(!panelOpen); });
+  toolsToggle.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPanel(!panelOpen); }
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && panelOpen) setPanel(false);
+  });
+
+  document.getElementById('placeholderBtn').addEventListener('click', function () {
+    setPanel(true);
+  });
+  document.getElementById('uploadBtn').addEventListener('click', function () {
+    fileInput.click();
+  });
+  document.getElementById('shuffleBtn').addEventListener('click', shuffle);
+
+  // =====================================================================
+  // Back to index — hash change on the parent document, never a reload.
+  // =====================================================================
+  const backIndex = document.getElementById('backIndex');
+  function goHome() {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.location.hash = '#home';
+        return;
+      }
+    } catch (err) { /* cross-origin parent — fall through */ }
+    window.location.href = 'index.html#home';
+  }
+  backIndex.addEventListener('click', goHome);
+  backIndex.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+  });
+
+  // Theme can change in another tab / the homepage — mirror it live.
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'beLight.theme') {
+      root.classList.toggle('dark', e.newValue === 'dark');
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
