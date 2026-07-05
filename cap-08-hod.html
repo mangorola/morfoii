@@ -308,6 +308,13 @@
   <text class="label-num"  x="120" y="45" font-size="11">08</text>
   <text class="label-name" x="162" y="45" font-size="11">HOD</text>
 
+  <!-- Theme toggle, top-right margin (left of the back control). Same
+       typographic treatment + localStorage contract as the homepage. -->
+  <g class="ctrl" id="themeToggle" role="button" tabindex="0" aria-label="Cambiar tema">
+    <rect class="hit" x="1586" y="30" width="76" height="24"/>
+    <text id="themeToggleText" x="1655" y="46" font-size="11" text-anchor="end">○ LUZ</text>
+  </g>
+
   <!-- Back to index, top-right margin -->
   <g class="ctrl" id="backIndex" role="link" tabindex="0" aria-label="Volver al índice">
     <rect class="hit" x="1670" y="30" width="140" height="24"/>
@@ -762,10 +769,36 @@
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
   });
 
+  // =====================================================================
+  // Theme toggle — discreet typographic control in the top margin. Shares
+  // index.html's contract: '.dark' class on <html> + 'beLight.theme' in
+  // localStorage, so the preference carries across the whole site. The
+  // label mirrors the homepage ('○ LUZ' / '● OSC').
+  // =====================================================================
+  const themeToggle = document.getElementById('themeToggle');
+  const themeToggleText = document.getElementById('themeToggleText');
+  function syncTheme() {
+    themeToggleText.textContent = root.classList.contains('dark') ? '● OSC' : '○ LUZ';
+  }
+  function flipTheme() {
+    root.classList.toggle('dark');
+    try {
+      localStorage.setItem('beLight.theme',
+        root.classList.contains('dark') ? 'dark' : 'light');
+    } catch (e) { /* storage unavailable — theme still flips for this view */ }
+    syncTheme();
+  }
+  themeToggle.addEventListener('click', flipTheme);
+  themeToggle.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipTheme(); }
+  });
+  syncTheme();
+
   // Theme can change in another tab / the homepage — mirror it live.
   window.addEventListener('storage', function (e) {
     if (e.key === 'beLight.theme') {
       root.classList.toggle('dark', e.newValue === 'dark');
+      syncTheme();
     }
   });
 })();
