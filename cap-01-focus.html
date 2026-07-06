@@ -1,32 +1,32 @@
 <!-- Chapter 01 — FOCUS (Chesed — expansive emission, the source that builds) -->
 <!-- Wrapper loaded into index.html via hash routing (#capitulo-01). -->
-<!-- The fluid simulation lives in cap-01-fluid.html and runs inside the iframe;
-     this wrapper only adds the shared FRAME (four lines + inner stage) around it.
-     The router re-executes <script> tags, so the theme toggle below works.
+<!-- The fluid simulation lives in cap-01-fluid.html (a WebGL scene on a black
+     field) and runs inside the iframe; this wrapper only wraps it in the shared
+     FRAME. The sim is light-agnostic and always dark, so this chapter is DARK
+     ONLY — no theme toggle. Colours are hardcoded to the dark palette and never
+     read the global theme, so opening this chapter never disturbs the homepage.
      DO NOT edit cap-01-fluid.html from here — only this wrapper is touched. -->
 
 <style>
-  /* Frame + ink colours flip with the shared theme. The wrapper is injected
-     into index.html's document, so :root.dark is the same root the homepage
-     toggles — --bg / --fg come from index.html and adapt automatically. */
+  /* Fixed dark palette for this chapter (matches index.html's :root.dark). */
   #cap-01-focus {
-    --focus-line: #D9D9D9;   /* light: pale grey rule (as on the homepage) */
-  }
-  :root.dark #cap-01-focus {
-    --focus-line: #2E2E2E;   /* dark: quiet rule on black */
+    --f-bg:   #000000;                    /* margins outside the inner stage   */
+    --f-line: #2E2E2E;                    /* frame rules                        */
+    --f-dim:  rgba(245, 245, 240, 0.5);   /* the "01" number, quiet            */
+    --f-fg:   #F5F5F0;                     /* the FOCUS name / back link         */
   }
 
   #cap-01-focus {
     position: fixed;
     inset: 0;
     overflow: hidden;
-    background: var(--bg);   /* the margins outside the inner stage */
+    background: var(--f-bg);
   }
 
   /* The simulation, constrained to the INNER STAGE (viewBox 80→1840, 80→1000).
-     The CSS values are the exact 16:9 fractions; JS refines them to the real
-     xMidYMid-meet rectangle so the iframe edges sit on the frame lines on any
-     aspect ratio. The sim inside runs exactly as before, just at this size. */
+     CSS gives the exact 16:9 fractions as a no-flash fallback; JS refines them
+     to the real xMidYMid-meet rectangle so the iframe edges sit on the frame
+     lines at any aspect ratio. The sim runs exactly as before, just at size. */
   #cap-01-focus .focus-sim {
     position: absolute;
     top: 7.4074%;            /* 80 / 1080  */
@@ -41,10 +41,11 @@
     z-index: 0;
   }
 
-  /* Frame overlay — one SVG in Figma coordinates, scaled with the same
-     preserveAspectRatio as the homepage so the rules never drift. Lines run to
-     the viewBox edges for the "infinite" cross look. Never blocks the sim. */
-  #cap-01-focus .focus-frame {
+  /* Frame + labels — one SVG in Figma coordinates, scaled with the same
+     preserveAspectRatio as the homepage and chapter 08, so nothing drifts.
+     Lines run well past the viewBox to reach the true viewport edges even
+     when the board is letterboxed. */
+  #cap-01-focus .focus-board {
     position: fixed;
     inset: 0;
     width: 100%;
@@ -52,64 +53,33 @@
     z-index: 10;
     pointer-events: none;
   }
-  #cap-01-focus .focus-frame line {
-    stroke: var(--focus-line);
-    stroke-width: 1;
-    vector-effect: non-scaling-stroke;   /* stays 1px at every scale */
-    shape-rendering: crispEdges;
-    transition: stroke 0.45s ease;
+  #cap-01-focus .frame {
+    fill: none;
+    stroke: var(--f-line);
+    stroke-width: var(--line-w, 0.9px);
+    vector-effect: non-scaling-stroke;   /* stays crisp at every scale */
   }
-
-  /* Top-margin bar — sits in the band above the inner stage, its ends aligned
-     to the left/right frame lines. Positioned by JS to track the stage. */
-  #cap-01-focus .focus-topbar {
-    position: fixed;
-    z-index: 20;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  #cap-01-focus .focus-board text {
     font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.22em;
+    font-weight: 400;
+    letter-spacing: 0.34em;
     text-transform: uppercase;
-    color: var(--fg);
-    pointer-events: none;    /* only the interactive children opt back in */
+    user-select: none;
   }
+  #cap-01-focus .label-num  { fill: var(--f-dim); }
+  #cap-01-focus .label-name { fill: var(--f-fg);  }
 
-  #cap-01-focus .focus-mark { white-space: nowrap; }
-  #cap-01-focus .focus-mark .sep { opacity: 0.4; margin: 0 0.8em; }
-
-  #cap-01-focus .focus-actions {
-    display: flex;
-    align-items: center;
-    gap: 1.8em;
-  }
-
-  #cap-01-focus .focus-back,
-  #cap-01-focus .focus-toggle {
-    pointer-events: auto;
-    font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
-    color: var(--fg);
-    background: none;
-    border: none;
-    padding: 4px 2px;
+  /* Back to index — the only interactive control. */
+  #cap-01-focus .ctrl {
     cursor: pointer;
-    text-decoration: none;
-    white-space: nowrap;
-    opacity: 0.75;
-    transition: opacity 0.3s ease, color 0.45s ease;
+    pointer-events: all;
+    fill: var(--f-dim);
+    transition: fill 0.3s ease;
   }
-  #cap-01-focus .focus-back:hover,
-  #cap-01-focus .focus-toggle:hover { opacity: 1; }
-
-  #cap-01-focus .focus-back .arrow {
-    display: inline-block;
-    margin-right: 0.5em;
-    transition: transform 0.3s ease;
-  }
-  #cap-01-focus .focus-back:hover .arrow { transform: translateX(-4px); }
+  #cap-01-focus .ctrl:hover,
+  #cap-01-focus .ctrl:focus-visible { fill: var(--f-fg); }
+  #cap-01-focus .ctrl:focus { outline: none; }
+  #cap-01-focus .ctrl .hit { fill: transparent; stroke: none; }
 </style>
 
 <section id="cap-01-focus">
@@ -121,23 +91,22 @@
     scrolling="no"
   ></iframe>
 
-  <!-- Four frame lines, extended to the viewBox edges for infinite crosses. -->
-  <svg class="focus-frame" viewBox="0 0 1920 1080"
-       preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-    <line x1="0" y1="80"   x2="1920" y2="80"   />
-    <line x1="0" y1="1000" x2="1920" y2="1000" />
-    <line x1="80"   y1="0" x2="80"   y2="1080" />
-    <line x1="1840" y1="0" x2="1840" y2="1080" />
-  </svg>
+  <!-- Frame lines + margin labels, all in artboard units (viewBox 0 0 1920 1080). -->
+  <svg class="focus-board" viewBox="0 0 1920 1080"
+       preserveAspectRatio="xMidYMid meet" aria-hidden="false">
+    <line class="frame" x1="-1000" y1="80"   x2="3000" y2="80"   />
+    <line class="frame" x1="-1000" y1="1000" x2="3000" y2="1000" />
+    <line class="frame" x1="80"    y1="-1000" x2="80"   y2="2080" />
+    <line class="frame" x1="1840"  y1="-1000" x2="1840" y2="2080" />
 
-  <!-- Top-margin controls: chapter mark, back to index, theme toggle. -->
-  <div class="focus-topbar">
-    <span class="focus-mark">01<span class="sep">·</span>FOCUS</span>
-    <div class="focus-actions">
-      <a class="focus-back" href="#home"><span class="arrow">&larr;</span>Índice</a>
-      <button class="focus-toggle" type="button" aria-label="Cambiar tema"></button>
-    </div>
-  </div>
+    <text class="label-num"  x="120" y="45" font-size="11">01</text>
+    <text class="label-name" x="162" y="45" font-size="11">FOCUS</text>
+
+    <g class="ctrl" id="focusBack" role="link" tabindex="0" aria-label="Volver al índice">
+      <rect class="hit" x="1670" y="30" width="140" height="24"/>
+      <text x="1800" y="46" font-size="11" text-anchor="end">&larr; Índice</text>
+    </g>
+  </svg>
 </section>
 
 <script>
@@ -146,49 +115,32 @@
   if (!section) return;
 
   const sim = section.querySelector('.focus-sim');
-  const topbar = section.querySelector('.focus-topbar');
-  const toggle = section.querySelector('.focus-toggle');
-  const root = document.documentElement;
+  const back = section.querySelector('#focusBack');
 
   // --- Inner stage in Figma units (must match the SVG frame above) ----------
   const VB_W = 1920, VB_H = 1080;
   const STAGE = { x: 80, y: 80, w: 1760, h: 920 };   // 80→1840, 80→1000
 
-  // Reproduce SVG's preserveAspectRatio="xMidYMid meet" so the iframe and the
-  // topbar land exactly on the frame lines regardless of the viewport shape.
+  // Reproduce the SVG's preserveAspectRatio="xMidYMid meet" so the iframe lands
+  // exactly on the frame lines regardless of the viewport shape.
   function layout() {
     const vw = window.innerWidth, vh = window.innerHeight;
     const scale = Math.min(vw / VB_W, vh / VB_H);
     const offX = (vw - VB_W * scale) / 2;
     const offY = (vh - VB_H * scale) / 2;
 
-    const left = offX + STAGE.x * scale;
-    const top = offY + STAGE.y * scale;
-    const width = STAGE.w * scale;
-    const height = STAGE.h * scale;
-
-    sim.style.left = left + 'px';
-    sim.style.top = top + 'px';
-    sim.style.width = width + 'px';
-    sim.style.height = height + 'px';
-
-    // Topbar: span the stage width, sit centred in the top-margin band.
-    topbar.style.left = left + 'px';
-    topbar.style.width = width + 'px';
-    topbar.style.top = offY + 'px';
-    topbar.style.height = (STAGE.y * scale) + 'px';
+    sim.style.left = (offX + STAGE.x * scale) + 'px';
+    sim.style.top = (offY + STAGE.y * scale) + 'px';
+    sim.style.width = (STAGE.w * scale) + 'px';
+    sim.style.height = (STAGE.h * scale) + 'px';
   }
 
-  // --- Theme (shared with the homepage via the same root + localStorage) ----
-  function syncToggle() {
-    toggle.textContent = root.classList.contains('dark') ? '● OSC' : '○ LUZ';
-  }
-  toggle.addEventListener('click', function () {
-    const dark = root.classList.toggle('dark');
-    try { localStorage.setItem('beLight.theme', dark ? 'dark' : 'light'); } catch (e) { /* storage off */ }
-    syncToggle();
+  // --- Back to index: hash change only, never a reload ----------------------
+  function goHome() { window.location.hash = '#home'; }
+  back.addEventListener('click', goHome);
+  back.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
   });
-  syncToggle();
 
   // --- Wire up, replacing any stale listener from a previous visit ----------
   layout();
