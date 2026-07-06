@@ -2,157 +2,125 @@
 <!-- Wrapper loaded into index.html via hash routing (#capitulo-01). -->
 <!-- Pure HTML + CSS: no <script>, so it works when injected via innerHTML. -->
 <!-- The simulation lives in cap-01-fluid.html and runs inside the iframe below. -->
-<!--
-     This wrapper adopts the shared FRAME system used across the project:
-       · 4 frame lines drawn in an SVG overlay (viewBox 0 0 1920 1080,
-         preserveAspectRatio xMidYMid meet) so they scale like the homepage.
-       · The simulation iframe is CLIPPED to the INNER STAGE (80→1840, 80→1000),
-         leaving 80px margin bands that show the page background (--bg).
-     Theme is inherited: injected into index.html, this markup reads the host's
-     :root / :root.dark variables (--bg, --fg, --fg-dim, --line), so dark mode
-     (persisted in localStorage by the host) adapts margins + frame lines with
-     no JS of its own.
--->
 
 <style>
   #cap-01-focus {
     position: fixed;
     inset: 0;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
-    background: var(--bg);   /* margin bands + letterbox = theme background */
   }
 
-  /* A viewport-filling stage that centres a 1920×1080 box, mimicking the SVG's
-     xMidYMid-meet letterboxing so the clipped iframe lines up with the frame. */
-  #cap-01-focus .focus-stage {
+  /* Fullscreen simulation — its own scripts run because it's an iframe document. */
+  #cap-01-focus .focus-sim {
     position: fixed;
     inset: 0;
-    display: grid;
-    place-items: center;
-    pointer-events: none;
-  }
-
-  /* The 16:9 box: as large as fits the viewport, uniformly contained + centred
-     (identical geometry to the SVG overlay's rendered frame). */
-  #cap-01-focus .focus-box {
-    position: relative;
-    aspect-ratio: 1920 / 1080;
-    width: min(100vw, 177.7778vh);   /* 1920/1080 = 1.77778 → object-fit: contain */
-    max-width: 100vw;
-    max-height: 100vh;
-  }
-
-  /* Inner stage: 80→1840 (x) / 80→1000 (y) of the box, as percentages.
-     left/right = 80/1920 = 4.16667% · top/bottom = 80/1080 = 7.40741% */
-  #cap-01-focus .focus-clip {
-    position: absolute;
-    left: 4.16667%;
-    right: 4.16667%;
-    top: 7.40741%;
-    bottom: 7.40741%;
-    overflow: hidden;            /* clip the simulation to the inner stage */
-    pointer-events: auto;        /* clicks reach the simulation underneath */
-  }
-
-  /* The simulation just fills the inner stage now instead of the whole viewport;
-     its own script reads this size and renders accordingly. */
-  #cap-01-focus .focus-sim {
-    display: block;
     width: 100%;
     height: 100%;
     border: none;
     margin: 0;
     padding: 0;
+    display: block;
+    z-index: 0;
   }
 
-  /* Top margin band — chapter mark + back link, flush with the inner stage
-     sides. Typographic, matches other chapters. */
-  #cap-01-focus .focus-topbar {
-    position: absolute;
-    top: 0;
-    left: 4.16667%;
-    right: 4.16667%;
-    height: 7.40741%;            /* the 80px top margin band */
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  /* Text overlay sits above the canvas but lets clicks pass through to it. */
+  #cap-01-focus .focus-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
     pointer-events: none;
-    font-family: 'Space Mono', monospace;
-    font-size: clamp(10px, 0.85vw, 12px);
-    letter-spacing: 0.28em;
-    text-transform: uppercase;
-    color: var(--fg-dim);
+    display: flex;
+    flex-direction: column;
+    padding: 2.5rem 3rem;
+    box-sizing: border-box;
+    color: #fff;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    mix-blend-mode: difference;
   }
 
-  #cap-01-focus .focus-mark {
-    display: inline-flex;
-    gap: 1.1em;
+  #cap-01-focus .focus-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
   }
-  #cap-01-focus .focus-mark .name { color: var(--fg); }
 
+  /* The only interactive element: it must capture clicks. */
   #cap-01-focus .focus-back {
     pointer-events: auto;
     display: inline-flex;
     align-items: center;
-    gap: 0.7em;
-    color: var(--fg-dim);
+    gap: 0.6rem;
+    color: #fff;
     text-decoration: none;
-    letter-spacing: 0.2em;
-    transition: color 0.35s ease;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
   }
-  #cap-01-focus .focus-back:hover { color: var(--fg); }
+
   #cap-01-focus .focus-back .arrow {
     display: inline-block;
     transition: transform 0.3s ease;
   }
-  #cap-01-focus .focus-back:hover .arrow { transform: translateX(-4px); }
 
-  /* Frame overlay — same 4 lines as the homepage, extended to viewport edges. */
-  #cap-01-focus .focus-frame {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;        /* never blocks the simulation */
-    z-index: 20;
+  #cap-01-focus .focus-back:hover .arrow {
+    transform: translateX(-4px);
   }
-  #cap-01-focus .focus-frame line {
-    stroke: var(--line);         /* adapts to theme (light/dark) */
-    stroke-width: 1;
+
+  #cap-01-focus .focus-meta {
+    text-align: right;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* Single centered letter "A". */
+  #cap-01-focus .focus-title {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  #cap-01-focus .focus-title h1 {
+    margin: 0;
+    font-size: clamp(6rem, 28vw, 22rem);
+    font-weight: 200;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  @media (max-width: 600px) {
+    #cap-01-focus .focus-overlay {
+      padding: 1.5rem 1.5rem;
+    }
   }
 </style>
 
 <section id="cap-01-focus">
-  <div class="focus-stage">
-    <div class="focus-box">
-      <!-- Isolated document: scripts, shaders and event listeners run normally. -->
-      <div class="focus-clip">
-        <iframe
-          class="focus-sim"
-          src="cap-01-fluid.html"
-          title="FOCUS — fluid light simulation"
-          scrolling="no"
-        ></iframe>
-      </div>
+  <!-- Isolated document: scripts, shaders and event listeners run normally. -->
+  <iframe
+    class="focus-sim"
+    src="cap-01-fluid.html"
+    title="FOCUS — fluid light simulation"
+    scrolling="no"
+  ></iframe>
 
-      <div class="focus-topbar">
-        <span class="focus-mark">
-          <span>01</span><span class="name">Focus</span>
-        </span>
-        <a class="focus-back" href="#home">
-          <span class="arrow">&larr;</span>
-          <span>Índice</span>
-        </a>
+  <div class="focus-overlay">
+    <header class="focus-top">
+      <a class="focus-back" href="#home">
+        <span class="arrow">&larr;</span>
+        <span>Índice</span>
+      </a>
+      <div class="focus-meta">
+        <div>01</div>
       </div>
+    </header>
+
+    <div class="focus-title">
+      <h1>A</h1>
     </div>
   </div>
-
-  <!-- Frame lines: top y=80, bottom y=1000, left x=80, right x=1840,
-       drawn full-bleed to the viewBox edges for the "infinite" look. -->
-  <svg class="focus-frame" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
-    <line x1="0" y1="80"   x2="1920" y2="80"   />
-    <line x1="0" y1="1000" x2="1920" y2="1000" />
-    <line x1="80"   y1="0" x2="80"   y2="1080" />
-    <line x1="1840" y1="0" x2="1840" y2="1080" />
-  </svg>
 </section>
