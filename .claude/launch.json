@@ -5,13 +5,13 @@
     {
       "name": "static",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "."],
-      "port": 3101
+      "runtimeArgs": ["http-server", "-c-1", "."],
+      "port": 3103
     },
     {
       "name": "static-b",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "-l", "4180", "."],
+      "runtimeArgs": ["http-server", "-c-1", "."],
       "port": 4180
     }
   ]

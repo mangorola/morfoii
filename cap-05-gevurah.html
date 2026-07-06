@@ -139,33 +139,6 @@
     width: 1760px;
     height: 920px;
   }
-
-  /* Principle text — shown once at rest, fades as the journey begins. */
-  #principle {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    pointer-events: none;
-    color: var(--fg);
-    transition: color 0.45s ease;
-  }
-  #principle p {
-    font-weight: 300;
-    font-size: 21px;
-    letter-spacing: 0.06em;
-  }
-  #principle span {
-    display: block;
-    margin-top: 34px;
-    font-family: 'Space Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.4em;
-    text-transform: uppercase;
-    color: var(--fg-dim);
-    transition: color 0.45s ease;
-  }
 </style>
 </head>
 <body>
@@ -176,10 +149,6 @@
   <div id="stage" role="img"
        aria-label="Panorama geométrico: el mismo gris cambia de color según sus vecinos">
     <canvas id="view"></canvas>
-    <div id="principle">
-      <p>Sometimes you see the color that isn't there.</p>
-      <span>Scroll</span>
-    </div>
   </div>
 </div>
 
@@ -236,7 +205,6 @@
     stageH: 920,
     maxQuality: 1.5,           // pixel-ratio cap (performance)
     smoothing: 0.14,           // scroll lerp factor (1 = raw, lower = softer)
-    fadeDistance: 380,         // px of travel over which the principle fades
   };
 
   const W = CONFIG.panoramaWidth;
@@ -459,7 +427,6 @@
   const artboard = document.getElementById('artboard');
   const spacer = document.getElementById('scrollSpace');
   const progress = document.getElementById('progress');
-  const principle = document.getElementById('principle');
 
   const layers = generateForms();
 
@@ -502,9 +469,6 @@
   function updateOverlay() {
     const p = TRAVEL > 0 ? current / TRAVEL : 0;
     progress.setAttribute('x2', (80 + CONFIG.stageW * p).toFixed(1));
-    const fade = Math.max(0, 1 - current / CONFIG.fadeDistance);
-    principle.style.opacity = fade.toFixed(3);
-    principle.style.visibility = fade <= 0 ? 'hidden' : 'visible';
   }
 
   // =====================================================================
@@ -517,7 +481,7 @@
   }
 
   function onScroll() {
-    target = clamp(window.scrollY * CONFIG.scrollSpeed / scale, 0, TRAVEL);
+    target = clamp(TRAVEL - window.scrollY * CONFIG.scrollSpeed / scale, 0, TRAVEL);
   }
 
   function layout() {
@@ -533,7 +497,7 @@
     // Preserve journey position across resizes: same progress, new mapping.
     const p = TRAVEL > 0 ? current / TRAVEL : 0;
     spacer.style.height = (window.innerHeight + maxScroll()) + 'px';
-    window.scrollTo(0, p * maxScroll());
+    window.scrollTo(0, (1 - p) * maxScroll());
     target = current;
 
     renderBuffer(current - CONFIG.tileWidth);
