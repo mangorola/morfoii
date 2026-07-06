@@ -1,126 +1,206 @@
-<!-- Chapter 01 — FOCUS -->
+<!-- Chapter 01 — FOCUS (Chesed — expansive emission, the source that builds) -->
 <!-- Wrapper loaded into index.html via hash routing (#capitulo-01). -->
-<!-- Pure HTML + CSS: no <script>, so it works when injected via innerHTML. -->
-<!-- The simulation lives in cap-01-fluid.html and runs inside the iframe below. -->
+<!-- The fluid simulation lives in cap-01-fluid.html and runs inside the iframe;
+     this wrapper only adds the shared FRAME (four lines + inner stage) around it.
+     The router re-executes <script> tags, so the theme toggle below works.
+     DO NOT edit cap-01-fluid.html from here — only this wrapper is touched. -->
 
 <style>
+  /* Frame + ink colours flip with the shared theme. The wrapper is injected
+     into index.html's document, so :root.dark is the same root the homepage
+     toggles — --bg / --fg come from index.html and adapt automatically. */
+  #cap-01-focus {
+    --focus-line: #D9D9D9;   /* light: pale grey rule (as on the homepage) */
+  }
+  :root.dark #cap-01-focus {
+    --focus-line: #2E2E2E;   /* dark: quiet rule on black */
+  }
+
   #cap-01-focus {
     position: fixed;
     inset: 0;
-    width: 100%;
-    height: 100%;
     overflow: hidden;
+    background: var(--bg);   /* the margins outside the inner stage */
   }
 
-  /* Fullscreen simulation — its own scripts run because it's an iframe document. */
+  /* The simulation, constrained to the INNER STAGE (viewBox 80→1840, 80→1000).
+     The CSS values are the exact 16:9 fractions; JS refines them to the real
+     xMidYMid-meet rectangle so the iframe edges sit on the frame lines on any
+     aspect ratio. The sim inside runs exactly as before, just at this size. */
   #cap-01-focus .focus-sim {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    top: 7.4074%;            /* 80 / 1080  */
+    left: 4.1667%;           /* 80 / 1920  */
+    width: 91.6667%;         /* 1760 / 1920 */
+    height: 85.1852%;        /* 920 / 1080 */
     border: none;
     margin: 0;
     padding: 0;
     display: block;
+    background: #000;        /* matches the sim's own clear colour, no flash */
     z-index: 0;
   }
 
-  /* Text overlay sits above the canvas but lets clicks pass through to it. */
-  #cap-01-focus .focus-overlay {
+  /* Frame overlay — one SVG in Figma coordinates, scaled with the same
+     preserveAspectRatio as the homepage so the rules never drift. Lines run to
+     the viewBox edges for the "infinite" cross look. Never blocks the sim. */
+  #cap-01-focus .focus-frame {
     position: fixed;
     inset: 0;
+    width: 100%;
+    height: 100%;
     z-index: 10;
     pointer-events: none;
-    display: flex;
-    flex-direction: column;
-    padding: 2.5rem 3rem;
-    box-sizing: border-box;
-    color: #fff;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    mix-blend-mode: difference;
+  }
+  #cap-01-focus .focus-frame line {
+    stroke: var(--focus-line);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;   /* stays 1px at every scale */
+    shape-rendering: crispEdges;
+    transition: stroke 0.45s ease;
   }
 
-  #cap-01-focus .focus-top {
+  /* Top-margin bar — sits in the band above the inner stage, its ends aligned
+     to the left/right frame lines. Positioned by JS to track the stage. */
+  #cap-01-focus .focus-topbar {
+    position: fixed;
+    z-index: 20;
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-  }
-
-  /* The only interactive element: it must capture clicks. */
-  #cap-01-focus .focus-back {
-    pointer-events: auto;
-    display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
-    color: #fff;
-    text-decoration: none;
-    font-size: 0.8rem;
-    letter-spacing: 0.18em;
+    justify-content: space-between;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    cursor: pointer;
+    color: var(--fg);
+    pointer-events: none;    /* only the interactive children opt back in */
   }
+
+  #cap-01-focus .focus-mark { white-space: nowrap; }
+  #cap-01-focus .focus-mark .sep { opacity: 0.4; margin: 0 0.8em; }
+
+  #cap-01-focus .focus-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.8em;
+  }
+
+  #cap-01-focus .focus-back,
+  #cap-01-focus .focus-toggle {
+    pointer-events: auto;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: var(--fg);
+    background: none;
+    border: none;
+    padding: 4px 2px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    opacity: 0.75;
+    transition: opacity 0.3s ease, color 0.45s ease;
+  }
+  #cap-01-focus .focus-back:hover,
+  #cap-01-focus .focus-toggle:hover { opacity: 1; }
 
   #cap-01-focus .focus-back .arrow {
     display: inline-block;
+    margin-right: 0.5em;
     transition: transform 0.3s ease;
   }
-
-  #cap-01-focus .focus-back:hover .arrow {
-    transform: translateX(-4px);
-  }
-
-  #cap-01-focus .focus-meta {
-    text-align: right;
-    font-size: 0.8rem;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-  }
-
-  /* Single centered letter "A". */
-  #cap-01-focus .focus-title {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-  }
-
-  #cap-01-focus .focus-title h1 {
-    margin: 0;
-    font-size: clamp(6rem, 28vw, 22rem);
-    font-weight: 200;
-    line-height: 1;
-    letter-spacing: -0.02em;
-  }
-
-  @media (max-width: 600px) {
-    #cap-01-focus .focus-overlay {
-      padding: 1.5rem 1.5rem;
-    }
-  }
+  #cap-01-focus .focus-back:hover .arrow { transform: translateX(-4px); }
 </style>
 
 <section id="cap-01-focus">
-  <!-- Isolated document: scripts, shaders and event listeners run normally. -->
+  <!-- Isolated document: the fluid sim's own scripts/shaders run normally. -->
   <iframe
     class="focus-sim"
     src="cap-01-fluid.html"
-    title="FOCUS — fluid light simulation"
+    title="FOCUS — simulación de luz fluida"
     scrolling="no"
   ></iframe>
 
-  <div class="focus-overlay">
-    <header class="focus-top">
-      <a class="focus-back" href="#home">
-        <span class="arrow">&larr;</span>
-        <span>Índice</span>
-      </a>
-      <div class="focus-meta">
-        <div>01</div>
-      </div>
-    </header>
+  <!-- Four frame lines, extended to the viewBox edges for infinite crosses. -->
+  <svg class="focus-frame" viewBox="0 0 1920 1080"
+       preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <line x1="0" y1="80"   x2="1920" y2="80"   />
+    <line x1="0" y1="1000" x2="1920" y2="1000" />
+    <line x1="80"   y1="0" x2="80"   y2="1080" />
+    <line x1="1840" y1="0" x2="1840" y2="1080" />
+  </svg>
 
-    <div class="focus-title">
-      <h1>A</h1>
+  <!-- Top-margin controls: chapter mark, back to index, theme toggle. -->
+  <div class="focus-topbar">
+    <span class="focus-mark">01<span class="sep">·</span>FOCUS</span>
+    <div class="focus-actions">
+      <a class="focus-back" href="#home"><span class="arrow">&larr;</span>Índice</a>
+      <button class="focus-toggle" type="button" aria-label="Cambiar tema"></button>
     </div>
   </div>
 </section>
+
+<script>
+(function () {
+  const section = document.getElementById('cap-01-focus');
+  if (!section) return;
+
+  const sim = section.querySelector('.focus-sim');
+  const topbar = section.querySelector('.focus-topbar');
+  const toggle = section.querySelector('.focus-toggle');
+  const root = document.documentElement;
+
+  // --- Inner stage in Figma units (must match the SVG frame above) ----------
+  const VB_W = 1920, VB_H = 1080;
+  const STAGE = { x: 80, y: 80, w: 1760, h: 920 };   // 80→1840, 80→1000
+
+  // Reproduce SVG's preserveAspectRatio="xMidYMid meet" so the iframe and the
+  // topbar land exactly on the frame lines regardless of the viewport shape.
+  function layout() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const scale = Math.min(vw / VB_W, vh / VB_H);
+    const offX = (vw - VB_W * scale) / 2;
+    const offY = (vh - VB_H * scale) / 2;
+
+    const left = offX + STAGE.x * scale;
+    const top = offY + STAGE.y * scale;
+    const width = STAGE.w * scale;
+    const height = STAGE.h * scale;
+
+    sim.style.left = left + 'px';
+    sim.style.top = top + 'px';
+    sim.style.width = width + 'px';
+    sim.style.height = height + 'px';
+
+    // Topbar: span the stage width, sit centred in the top-margin band.
+    topbar.style.left = left + 'px';
+    topbar.style.width = width + 'px';
+    topbar.style.top = offY + 'px';
+    topbar.style.height = (STAGE.y * scale) + 'px';
+  }
+
+  // --- Theme (shared with the homepage via the same root + localStorage) ----
+  function syncToggle() {
+    toggle.textContent = root.classList.contains('dark') ? '● OSC' : '○ LUZ';
+  }
+  toggle.addEventListener('click', function () {
+    const dark = root.classList.toggle('dark');
+    try { localStorage.setItem('beLight.theme', dark ? 'dark' : 'light'); } catch (e) { /* storage off */ }
+    syncToggle();
+  });
+  syncToggle();
+
+  // --- Wire up, replacing any stale listener from a previous visit ----------
+  layout();
+  if (window.__focusResize) window.removeEventListener('resize', window.__focusResize);
+  window.__focusResize = function () {
+    if (!document.getElementById('cap-01-focus')) {        // chapter left — clean up
+      window.removeEventListener('resize', window.__focusResize);
+      window.__focusResize = null;
+      return;
+    }
+    layout();
+  };
+  window.addEventListener('resize', window.__focusResize);
+})();
+</script>
