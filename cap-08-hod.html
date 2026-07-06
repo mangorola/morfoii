@@ -257,10 +257,31 @@
     letter-spacing: 0.3em;
     text-transform: uppercase;
     color: var(--fg-dim);
-    width: 64px;
+    width: 90px;   /* fits "COLOR A" */
     text-align: right;
     transition: color 0.45s ease;
   }
+
+  /* Extracted-palette swatches — read the same CSS vars as the grid, so
+     they recolour automatically when a new image sets the palette. */
+  .swatch {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--fg-faint);
+    transition: background-color 0.3s ease, border-color 0.45s ease;
+  }
+  #swatchA { background-color: var(--color-a); }
+  #swatchB { background-color: var(--color-b); }
+
+  /* Hover-radius control — only meaningful while the brush is live, so it
+     rides the .hover-on class (#stage) that also drives the plates. Its
+     label needs no fixed alignment width (it isn't in a colour row), and a
+     compact track suits the small whole-number range. */
+  #radiusGroup { display: none; }
+  .hover-on #radiusGroup { display: flex; }
+  #radiusGroup label { width: auto; }
+  #radiusGroup input[type="range"] { width: 130px; }
 
   /* Custom range inputs: hairline track + small round thumb. */
   input[type="range"] {
@@ -356,44 +377,51 @@
           <button class="btn" id="uploadBtn"  type="button">Upload image</button>
           <button class="btn" id="shuffleBtn" type="button">Shuffle</button>
           <button class="btn" id="hoverBtn"   type="button" aria-pressed="false">Hover: Off</button>
+          <!-- Hover radius — shown only while hover mode is ON (.hover-on on #stage) -->
+          <div class="slider-group" id="radiusGroup">
+            <label for="radius">RADIO</label>
+            <input type="range" id="radius" step="1" aria-label="Radio del pincel">
+          </div>
         </div>
         <div class="slider-group">
           <label for="opImg">IMG</label>
           <input type="range" id="opImg" min="0" max="1" step="0.01" value="1">
         </div>
       </div>
-      <!-- Row 2 — colour A: opacity / coverage / clustering -->
+      <!-- Row 2 — colour A: swatch / opacity / coverage / clustering -->
       <div class="panel-row">
         <div class="slider-group">
-          <label for="opA" id="labelA">AZUL</label>
+          <span class="swatch" id="swatchA" aria-hidden="true"></span>
+          <label for="opA" id="labelA">COLOR A</label>
           <input type="range" id="opA" min="0" max="1" step="0.01" value="0.85">
         </div>
         <div class="slider-group">
           <label for="covA">COB.</label>
           <input type="range" id="covA" min="0" max="1" step="0.01" value="0.45"
-                 aria-label="Cobertura azul">
+                 aria-label="Cobertura color A">
         </div>
         <div class="slider-group">
           <label for="cluA">GRUPO</label>
           <input type="range" id="cluA" min="0" max="1" step="0.01" value="0.3"
-                 aria-label="Agrupación azul">
+                 aria-label="Agrupación color A">
         </div>
       </div>
-      <!-- Row 3 — colour B: opacity / coverage / clustering -->
+      <!-- Row 3 — colour B: swatch / opacity / coverage / clustering -->
       <div class="panel-row">
         <div class="slider-group">
-          <label for="opB" id="labelB">MAG</label>
+          <span class="swatch" id="swatchB" aria-hidden="true"></span>
+          <label for="opB" id="labelB">COLOR B</label>
           <input type="range" id="opB" min="0" max="1" step="0.01" value="0.85">
         </div>
         <div class="slider-group">
           <label for="covB">COB.</label>
           <input type="range" id="covB" min="0" max="1" step="0.01" value="0.4"
-                 aria-label="Cobertura magenta">
+                 aria-label="Cobertura color B">
         </div>
         <div class="slider-group">
           <label for="cluB">GRUPO</label>
           <input type="range" id="cluB" min="0" max="1" step="0.01" value="0.3"
-                 aria-label="Agrupación magenta">
+                 aria-label="Agrupación color B">
         </div>
       </div>
     </div>
@@ -414,8 +442,15 @@
   const CONFIG = {
     gridCols: 24,
     gridRows: 16,
-    colorA: '#00338A',       // dark blue — layer 2 plate
-    colorB: '#FF00FF',       // magenta — layer 3 plate
+    colorA: '#00338A',       // layer 2 plate — FALLBACK, used until an image
+                             // is uploaded (then replaced by extraction)
+    colorB: '#FF00FF',       // layer 3 plate — fallback, same deal
+    extract: {               // dominant-colour extraction (k-means, k=2)
+      sampleWidth: 100,      // image downsampled to this width before sampling
+      iterations: 10,        // k=2 converges fast
+      minBrightness: 15,     // ignore near-black pixels (shadows)
+      maxBrightness: 240,    // ignore near-white pixels (backgrounds)
+    },
     coverageA: 0.45,         // 45% of cells covered by color A
     coverageB: 0.40,         // 40% of cells covered by color B
     defaultOpacityImg: 1.0,
@@ -431,8 +466,8 @@
     hoverDefaultOn: false,   // initial state of the HOVER toggle button
     clusterPeriod: { min: 0.8, max: 12 },  // noise period in cells at
                              // cluster 0 → 1 (sub-cell = pure scatter)
-    labelA: 'AZUL',          // slider label for layer 2
-    labelB: 'MAG',           // slider label for layer 3
+    labelA: 'COLOR A',       // slider label for layer 2
+    labelB: 'COLOR B',       // slider label for layer 3
     artboard: { w: 1920, h: 1080 },
     stage: { x: 80, y: 80, w: 1760, h: 920 },   // frame rectangle
     panelHeight: 216,        // tools panel, artboard px
@@ -565,12 +600,84 @@
 
   // =====================================================================
   // Image upload — the image is cover-cropped to the stage, then each
-  // cell shows its slice via background-position (one image, 384 crops;
-  // no canvas). All math in artboard px: the CSS scale keeps it true.
+  // cell shows its slice via background-position (one image, 384 crops).
+  // All math in artboard px: the CSS scale keeps it true. On every upload
+  // the two plate colours are re-extracted from the image itself.
   // =====================================================================
   const placeholder = document.getElementById('placeholder');
   let currentURL = null;
   let loadSeq = 0;
+
+  // --- Dominant-colour extraction (k-means, k=2) -------------------------
+  // The image is drawn once on a tiny offscreen canvas (~100px wide) and
+  // clustered in RGB space. Near-black/near-white pixels are excluded so
+  // backgrounds and shadows don't dominate. Runs once per upload.
+  function rgbToHex(c) {
+    return '#' + c.map(function (v) {
+      return Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+    }).join('');
+  }
+
+  // Returns [hexA, hexB] with A the larger cluster, or null if the image
+  // yields too few usable pixels (then the current palette is kept).
+  function extractColors(img) {
+    const cfg = CONFIG.extract;
+    const w = cfg.sampleWidth;
+    const h = Math.max(1, Math.round(img.naturalHeight * w / img.naturalWidth));
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, w, h);
+    let data;
+    try { data = ctx.getImageData(0, 0, w, h).data; }
+    catch (e) { return null; }             // tainted canvas — keep palette
+    const px = [];
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;     // transparent
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const bright = (r + g + b) / 3;
+      if (bright < cfg.minBrightness || bright > cfg.maxBrightness) continue;
+      px.push([r, g, b]);
+    }
+    if (px.length < 2) return null;
+    const pick = function () { return px[(Math.random() * px.length) | 0].slice(); };
+    let cA = pick(), cB = pick();
+    let nA = 0, nB = 0;
+    for (let it = 0; it < cfg.iterations; it++) {
+      const sum = [[0, 0, 0], [0, 0, 0]];
+      const n = [0, 0];
+      for (let p = 0; p < px.length; p++) {
+        const q = px[p];
+        const dA = (q[0] - cA[0]) * (q[0] - cA[0])
+                 + (q[1] - cA[1]) * (q[1] - cA[1])
+                 + (q[2] - cA[2]) * (q[2] - cA[2]);
+        const dB = (q[0] - cB[0]) * (q[0] - cB[0])
+                 + (q[1] - cB[1]) * (q[1] - cB[1])
+                 + (q[2] - cB[2]) * (q[2] - cB[2]);
+        const k = dA <= dB ? 0 : 1;
+        sum[k][0] += q[0]; sum[k][1] += q[1]; sum[k][2] += q[2]; n[k]++;
+      }
+      if (n[0]) cA = [sum[0][0] / n[0], sum[0][1] / n[0], sum[0][2] / n[0]];
+      else cA = pick();                    // empty cluster — reseed
+      if (n[1]) cB = [sum[1][0] / n[1], sum[1][1] / n[1], sum[1][2] / n[1]];
+      else cB = pick();
+      nA = n[0]; nB = n[1];
+    }
+    if (nB > nA) { const t = cA; cA = cB; cB = t; }   // A = dominant
+    return [rgbToHex(cA), rgbToHex(cB)];
+  }
+
+  // Push a palette into the CSS vars — grid cells and panel swatches all
+  // read --color-a/--color-b, so everything recolours in one move.
+  const swatchA = document.getElementById('swatchA');
+  const swatchB = document.getElementById('swatchB');
+  function applyPalette(hexA, hexB) {
+    root.style.setProperty('--color-a', hexA);
+    root.style.setProperty('--color-b', hexB);
+    swatchA.title = hexA.toUpperCase();
+    swatchB.title = hexB.toUpperCase();
+  }
+  applyPalette(CONFIG.colorA, CONFIG.colorB);   // fallback palette until upload
 
   function applyImage(url, iw, ih) {
     const SW = CONFIG.stage.w, SH = CONFIG.stage.h;
@@ -596,6 +703,8 @@
     const probe = new Image();
     probe.onload = function () {
       if (seq !== loadSeq) { URL.revokeObjectURL(url); return; }  // superseded
+      const palette = extractColors(probe);
+      if (palette) applyPalette(palette[0], palette[1]);
       applyImage(url, probe.naturalWidth, probe.naturalHeight);
       if (currentURL) URL.revokeObjectURL(currentURL);
       currentURL = url;
@@ -697,12 +806,13 @@
   const stageEl = document.getElementById('stage');
   const HOVER_MS = 1000 / CONFIG.hoverFps;
   let hoverMode = false;       // OFF by default — sliders rule the grid
+  let hoverRadius = CONFIG.hoverRadius;  // live, driven by the RADIO slider
   const stamped = new Set();   // cell indices locked as permanently revealed
   let brushPrev = new Map();   // cell index → live brush weight (this radius)
   let brushTimer = null, brushLast = 0, brushEvt = null;
 
   function brushWeight(d) {
-    const R = CONFIG.hoverRadius;
+    const R = hoverRadius;
     if (d > R) return 0;
     const f = CONFIG.hoverFalloff;
     if (!f) return 1;                       // hard edge
@@ -713,8 +823,16 @@
   // Cells within the brush radius of (gx,gy) → Map(cellIndex → weight),
   // weight ~1 at the centre falling to 0 at the edge (CONFIG.hoverFalloff).
   function radiusWeights(gx, gy) {
-    const R = CONFIG.hoverRadius;
+    const R = hoverRadius;
     const m = new Map();
+    // Precision mode (radius 1): just the single cell under the cursor,
+    // fully transparent, no falloff.
+    if (R <= 1) {
+      const c = Math.min(COLS - 1, Math.max(0, Math.floor(gx)));
+      const r = Math.min(ROWS - 1, Math.max(0, Math.floor(gy)));
+      m.set(r * COLS + c, 1);
+      return m;
+    }
     const c0 = Math.max(0, Math.floor(gx - R)), c1 = Math.min(COLS - 1, Math.ceil(gx + R));
     const r0 = Math.max(0, Math.floor(gy - R)), r1 = Math.min(ROWS - 1, Math.ceil(gy + R));
     for (let r = r0; r <= r1; r++) {
@@ -836,6 +954,16 @@
   }
   hoverBtn.addEventListener('click', function () { setHover(!hoverMode); });
   setHover(CONFIG.hoverDefaultOn);
+
+  // Hover-radius slider (RADIO) — 1 (precision, single cell) up to the
+  // CONFIG maximum, whole steps, defaulting to the max. Updates live.
+  const radiusInput = document.getElementById('radius');
+  radiusInput.min = 1;
+  radiusInput.max = CONFIG.hoverRadius;
+  radiusInput.value = hoverRadius;
+  radiusInput.addEventListener('input', function () {
+    hoverRadius = Math.max(1, parseInt(radiusInput.value, 10) || 1);
+  });
 
   // =====================================================================
   // Back to index — hash change on the parent document, never a reload.
