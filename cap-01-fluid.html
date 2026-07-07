@@ -19,10 +19,27 @@
     height: 100vh;
     cursor: crosshair;
   }
+  /* Capture flash — a brief white veil (camera-shutter feel) on spacebar. */
+  #flash {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #flash.fire {
+    animation: flashFade 200ms ease-out;
+  }
+  @keyframes flashFade {
+    0%   { opacity: 0.75; }
+    100% { opacity: 0; }
+  }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="flash"></div>
 <script>
 "use strict";
 
@@ -65,8 +82,10 @@ const palette = [
 let activeColorIndex = 1; // start on yellow
 
 // ---- WebGL context -------------------------------------------------
-const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: false })
-        || canvas.getContext('webgl',  { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: false });
+// preserveDrawingBuffer: true is required so the capture system's
+// canvas.toDataURL() reads back the rendered frame instead of a blank image.
+const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: true })
+        || canvas.getContext('webgl',  { alpha: false, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: true });
 const isWebGL2 = !!(gl && gl.texImage3D);
 
 if (!gl) {
@@ -766,6 +785,34 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// ---- Capture: spacebar grabs the current frame -------------------
+// Reads the canvas as a JPEG (small enough for localStorage) and hands
+// it to the wrapper (cap-01-focus.html) via postMessage. preserveDrawingBuffer
+// (set on the context above) is what lets toDataURL see the rendered frame.
+const flash = document.getElementById('flash');
+
+function captureFrame() {
+  let dataURL;
+  try {
+    dataURL = canvas.toDataURL('image/jpeg', 0.7);
+  } catch (err) {
+    return;
+  }
+  window.parent.postMessage({ type: 'capture', image: dataURL }, '*');
+
+  // Camera-shutter veil: retrigger the CSS animation each press.
+  flash.classList.remove('fire');
+  void flash.offsetWidth;   // reflow so the animation restarts
+  flash.classList.add('fire');
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.key === ' ') {
+    e.preventDefault();     // stop the page from scrolling
+    captureFrame();
+  }
+});
 </script>
 </body>
 </html>

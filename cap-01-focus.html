@@ -14,6 +14,21 @@
     --f-line: #2E2E2E;                    /* frame rules                        */
     --f-dim:  rgba(245, 245, 240, 0.5);   /* the "01" number, quiet            */
     --f-fg:   #F5F5F0;                     /* the FOCUS name / back link         */
+
+    /* Gallery palette — the ONE part of this chapter that follows the global
+       theme (the frame/sim stay dark). Light defaults; dark override below. */
+    --g-panel: rgba(250, 250, 248, 0.92);
+    --g-fg:    #1a1a1a;
+    --g-dim:   rgba(26, 26, 26, 0.55);
+    --g-line:  rgba(26, 26, 26, 0.22);
+    --g-slot:  rgba(0, 0, 0, 0.04);
+  }
+  :root.dark #cap-01-focus {
+    --g-panel: rgba(12, 12, 12, 0.92);
+    --g-fg:    #f5f5f0;
+    --g-dim:   rgba(245, 245, 240, 0.55);
+    --g-line:  rgba(245, 245, 240, 0.20);
+    --g-slot:  rgba(255, 255, 255, 0.04);
   }
 
   #cap-01-focus {
@@ -80,6 +95,124 @@
   #cap-01-focus .ctrl:focus-visible { fill: var(--f-fg); }
   #cap-01-focus .ctrl:focus { outline: none; }
   #cap-01-focus .ctrl .hit { fill: transparent; stroke: none; }
+
+  /* --- Capture hint: top margin, same type as the "01 FOCUS" label -------- */
+  #cap-01-focus .cap-hint {
+    position: fixed;
+    z-index: 15;
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    font-size: 11px;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: var(--f-fg);        /* over the always-dark top margin */
+    opacity: 0.3;
+    white-space: nowrap;
+    pointer-events: none;
+    transition: opacity 0.7s ease;
+  }
+  #cap-01-focus .cap-hint.gone { opacity: 0; }
+
+  /* --- Gallery: bottom-anchored; toggle rides on top of the sliding panel -- */
+  #cap-01-focus .gallery {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;      /* only the toggle + panel are interactive */
+  }
+  #cap-01-focus .gallery-toggle {
+    pointer-events: auto;
+    cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    font-size: 11px;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: var(--g-fg);
+    background: var(--g-panel);
+    border: 1px solid var(--g-line);
+    border-radius: 999px;
+    padding: 8px 20px;
+    margin-bottom: 12px;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    transition: opacity 0.3s ease, background 0.3s ease, color 0.3s ease;
+    opacity: 0.72;
+  }
+  #cap-01-focus .gallery-toggle:hover,
+  #cap-01-focus .gallery-toggle:focus-visible { opacity: 1; }
+  #cap-01-focus .gallery-toggle:focus { outline: none; }
+  #cap-01-focus .gallery.open .gallery-toggle { margin-bottom: 0; }
+
+  #cap-01-focus .gallery-panel {
+    pointer-events: auto;
+    width: min(94vw, 940px);
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    background: var(--g-panel);
+    border: 1px solid var(--g-line);
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    transition: max-height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.3s ease;
+  }
+  #cap-01-focus .gallery.open .gallery-panel {
+    max-height: 62vh;
+    opacity: 1;
+  }
+  #cap-01-focus .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    padding: 16px;
+  }
+  #cap-01-focus .gallery-slot {
+    aspect-ratio: 16 / 9;
+    border-radius: 3px;
+  }
+  #cap-01-focus .gallery-slot.empty {
+    border: 1px dashed var(--g-line);
+    background: var(--g-slot);
+  }
+  #cap-01-focus .gallery-slot.filled {
+    overflow: hidden;
+    cursor: pointer;
+    background: #000;
+  }
+  #cap-01-focus .gallery-slot.filled img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.25s ease;
+  }
+  #cap-01-focus .gallery-slot.filled:hover img { transform: scale(1.05); }
+
+  /* --- Lightbox: click anywhere to close --------------------------------- */
+  #cap-01-focus .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.9);
+    cursor: zoom-out;
+  }
+  #cap-01-focus .lightbox.open { display: flex; }
+  #cap-01-focus .lightbox img {
+    max-width: 88vw;
+    max-height: 88vh;
+    box-shadow: 0 12px 64px rgba(0, 0, 0, 0.6);
+  }
 </style>
 
 <section id="cap-01-focus">
@@ -107,6 +240,22 @@
       <text x="1800" y="46" font-size="11" text-anchor="end">&larr; Índice</text>
     </g>
   </svg>
+
+  <!-- Capture hint (top margin) — fades out for good after the first capture. -->
+  <div class="cap-hint" id="focusHint">Space to capture</div>
+
+  <!-- Gallery: closed = just the toggle at bottom centre; open = grid slides up. -->
+  <div class="gallery" id="focusGallery">
+    <button class="gallery-toggle" id="galleryToggle" type="button" aria-expanded="false">&#9650; Gallery</button>
+    <div class="gallery-panel" id="galleryPanel">
+      <div class="gallery-grid" id="galleryGrid"></div>
+    </div>
+  </div>
+
+  <!-- Lightbox — an enlarged capture over a dark veil, click anywhere to close. -->
+  <div class="lightbox" id="focusLightbox" role="dialog" aria-label="Captura ampliada">
+    <img id="focusLightboxImg" alt="Captura ampliada" />
+  </div>
 </section>
 
 <script>
@@ -116,6 +265,24 @@
 
   const sim = section.querySelector('.focus-sim');
   const back = section.querySelector('#focusBack');
+  const hint = section.querySelector('#focusHint');
+  const galleryEl = section.querySelector('#focusGallery');
+  const toggle = section.querySelector('#galleryToggle');
+  const grid = section.querySelector('#galleryGrid');
+  const lightbox = section.querySelector('#focusLightbox');
+  const lightboxImg = section.querySelector('#focusLightboxImg');
+
+  // --- Capture / gallery tunables -------------------------------------------
+  const CONFIG = {
+    maxSessionCaptures: 21,          // in-memory gallery (FIFO)
+    maxPersistentCaptures: 7,        // localStorage array the video chapter reads
+    galleryRows: 3,
+    galleryCols: 7,
+    captureWidth: 800,               // max width for downscaled captures (px)
+    captureQuality: 0.7,             // JPEG quality for the downscaled export
+    flashDuration: 200,              // ms — shutter flash (rendered in the iframe)
+    storageKey: 'beLight.captures',
+  };
 
   // --- Inner stage in Figma units (must match the SVG frame above) ----------
   const VB_W = 1920, VB_H = 1080;
@@ -133,6 +300,11 @@
     sim.style.top = (offY + STAGE.y * scale) + 'px';
     sim.style.width = (STAGE.w * scale) + 'px';
     sim.style.height = (STAGE.h * scale) + 'px';
+
+    // Hint sits centred in the top margin, on the label's baseline row.
+    hint.style.left = (offX + (VB_W / 2) * scale) + 'px';
+    hint.style.top = (offY + 40 * scale) + 'px';
+    hint.style.transform = 'translate(-50%, -50%)';
   }
 
   // --- Back to index: hash change only, never a reload ----------------------
@@ -141,6 +313,157 @@
   back.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
   });
+
+  // ==========================================================================
+  //  CAPTURE + GALLERY
+  //  The iframe grabs a frame on Space and postMessages a JPEG dataURL here.
+  //  We downscale it, keep the last 21 in memory (the visual gallery) and the
+  //  last 7 in localStorage (what the future video chapter reads as filters).
+  // ==========================================================================
+
+  // Session gallery: index 0 = oldest, last = newest. Array of {image, timestamp}.
+  let sessionCaptures = [];
+  let hintDismissed = false;
+
+  // ---- localStorage helpers -----------------------------------------------
+  function loadPersisted() {
+    try {
+      const raw = localStorage.getItem(CONFIG.storageKey);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(function (x) { return x && typeof x.image === 'string'; });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function savePersisted(arr) {
+    // Trim to the newest N, then write. If the quota is hit, drop the oldest
+    // and retry until it fits (or nothing is left to drop).
+    let out = arr.slice(Math.max(0, arr.length - CONFIG.maxPersistentCaptures));
+    while (out.length > 0) {
+      try {
+        localStorage.setItem(CONFIG.storageKey, JSON.stringify(out));
+        return;
+      } catch (e) {
+        out = out.slice(1);
+      }
+    }
+  }
+
+  // ---- Downscale a capture to <=captureWidth and re-export as JPEG ----------
+  function downscale(dataURL) {
+    return new Promise(function (resolve) {
+      const img = new Image();
+      img.onload = function () {
+        const ratio = Math.min(1, CONFIG.captureWidth / img.width);
+        const w = Math.max(1, Math.round(img.width * ratio));
+        const h = Math.max(1, Math.round(img.height * ratio));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(cv.toDataURL('image/jpeg', CONFIG.captureQuality));
+        } catch (e) {
+          resolve(dataURL);
+        }
+      };
+      img.onerror = function () { resolve(dataURL); };
+      img.src = dataURL;
+    });
+  }
+
+  // ---- Add a capture to both storage layers, then repaint the grid ---------
+  function addCapture(dataURL) {
+    downscale(dataURL).then(function (small) {
+      const entry = { image: small, timestamp: Date.now() };
+
+      sessionCaptures.push(entry);
+      if (sessionCaptures.length > CONFIG.maxSessionCaptures) sessionCaptures.shift();
+
+      const persisted = loadPersisted();
+      persisted.push(entry);
+      savePersisted(persisted);
+
+      renderGallery();
+      dismissHint();
+    });
+  }
+
+  // ---- Paint the 21 slots (oldest → newest, filling left→right, top→bottom) -
+  function renderGallery() {
+    const total = CONFIG.galleryRows * CONFIG.galleryCols;
+    grid.innerHTML = '';
+    for (let i = 0; i < total; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'gallery-slot';
+      const cap = sessionCaptures[i];
+      if (cap) {
+        slot.classList.add('filled');
+        const img = document.createElement('img');
+        img.src = cap.image;
+        img.alt = 'Captura';
+        slot.appendChild(img);
+        slot.addEventListener('click', function () { openLightbox(cap.image); });
+      } else {
+        slot.classList.add('empty');
+      }
+      grid.appendChild(slot);
+    }
+  }
+
+  // ---- Lightbox ------------------------------------------------------------
+  function openLightbox(src) {
+    lightboxImg.src = src;
+    lightbox.classList.add('open');
+  }
+  function closeLightbox() {
+    lightbox.classList.remove('open');
+    lightboxImg.removeAttribute('src');
+  }
+  lightbox.addEventListener('click', closeLightbox);
+
+  // ---- Gallery toggle ------------------------------------------------------
+  function toggleGallery() {
+    const open = galleryEl.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.innerHTML = (open ? '▼' : '▲') + ' Gallery';
+  }
+  toggle.addEventListener('click', toggleGallery);
+
+  // ---- Hint: fade out for good once the first capture lands ----------------
+  function dismissHint() {
+    if (hintDismissed) return;
+    hintDismissed = true;
+    hint.classList.add('gone');
+  }
+
+  // ---- Prime from localStorage so returning users see their past captures --
+  sessionCaptures = loadPersisted().slice(-CONFIG.maxSessionCaptures);
+  if (sessionCaptures.length > 0) dismissHint();   // they've captured before
+  renderGallery();
+
+  // ---- Receive captures from the iframe (guard against stale/foreign msgs) --
+  if (window.__focusCaptureMsg) window.removeEventListener('message', window.__focusCaptureMsg);
+  window.__focusCaptureMsg = function (e) {
+    if (!document.getElementById('cap-01-focus')) {        // chapter left — detach
+      window.removeEventListener('message', window.__focusCaptureMsg);
+      window.__focusCaptureMsg = null;
+      return;
+    }
+    if (e.source !== sim.contentWindow) return;            // only our iframe
+    const d = e.data;
+    if (d && d.type === 'capture' && typeof d.image === 'string') addCapture(d.image);
+  };
+  window.addEventListener('message', window.__focusCaptureMsg);
+
+  // ---- Give the sim keyboard focus so Space reaches it without a click first -
+  function focusSim() { try { sim.contentWindow.focus(); } catch (e) {} }
+  sim.addEventListener('load', focusSim);
+  sim.addEventListener('mouseenter', focusSim);
+  focusSim();
 
   // --- Wire up, replacing any stale listener from a previous visit ----------
   layout();
