@@ -230,6 +230,10 @@
   }
   const PAL = CONFIG.palette.map(hexToRgb);
   const STEEL = PAL[0], SAGE = PAL[1], CRIMSON = PAL[2], PINK = PAL[3], ORANGE = PAL[4];
+  // Thin verticals use their own 3-stop track (not from the main palette):
+  // grey → orange → crimson, sampled by x-position.
+  const GREY = hexToRgb('#D9D9D9');
+  const VT_SOLO = [GREY, ORANGE, CRIMSON];
 
   // Gradient-endpoint tracks. Each track is a row of evenly spaced colour
   // stops; sampling it at t ∈ [0,1] interpolates smoothly between adjacent
@@ -347,17 +351,14 @@
     }
 
     // 2) Thin verticals — fixed columns; a 2px-wide gradient is
-    //    imperceptible, so each is filled with its gradient's midpoint
-    //    colour, sampled from the warm→cold tracks at its x-position.
+    //    imperceptible, so each is filled with a SOLID colour sampled from
+    //    the 3-stop grey→orange→crimson track at its x-centre. Colour
+    //    variation lives BETWEEN lines, not within.
     ctx.globalAlpha = CONFIG.vThin.opacity;
     for (let x = 0; x < vw; x += V_UNIT) {
       const t = (x + CONFIG.vThin.width / 2) / vw;
-      sampleTrack(VT_START, t, cA);
-      sampleTrack(VT_END, t, cB);
-      cMid[0] = (cA[0] + cB[0]) / 2;
-      cMid[1] = (cA[1] + cB[1]) / 2;
-      cMid[2] = (cA[2] + cB[2]) / 2;
-      ctx.fillStyle = rgbStr(cMid);
+      sampleTrack(VT_SOLO, t, cA);
+      ctx.fillStyle = rgbStr(cA);
       ctx.fillRect(x, 0, CONFIG.vThin.width, vh);
     }
 
