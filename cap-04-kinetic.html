@@ -5,13 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>04</title>
 
-<!-- Theme before first paint: same key + class contract as index.html. -->
+<!-- Chapter 04 is always dark by default: force '.dark' before first paint so
+     the field opens on black regardless of the global theme. The toggle below
+     still works in-session (and writes to localStorage as usual), so the user
+     can flip to light if they want; it just doesn't start there. -->
 <script>
-  try {
-    if (localStorage.getItem('beLight.theme') === 'dark') {
-      document.documentElement.classList.add('dark');
-    }
-  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+  document.documentElement.classList.add('dark');
 </script>
 
 <style>
