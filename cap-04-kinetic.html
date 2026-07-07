@@ -199,9 +199,9 @@
   const CONFIG = {
     scrollHeight: 20000,
     palette: ['#8EABBF', '#C8D4D3', '#B7364C', '#F85794', '#F89626'],
-    hLine: { height: 24, spacing: 9 },
+    hLine: { height: 6, spacing: 9 },       // horizontal MEDIUM lines (6px)
     vThin: { width: 2, spacing: 13, opacity: 0.85 },
-    vThick: { width: 6, spacing: 30, gapFromThin: 4 },
+    vThick: { width: 24, spacing: 30, gapFromThin: 4 },  // vertical THICK bars (24px)
     frameDelay: 800,
     frameFade: 1500,
     frameShowThreshold: 100,
@@ -295,10 +295,10 @@
   }
 
   // Repeating units.
-  //  - Horizontal: one 24px line + 9px gap = 33px, tiled down the full
+  //  - Horizontal: one 6px MEDIUM line + 9px gap = 15px, tiled down the full
   //    20000px scroll field (lines live at ABSOLUTE y; the fixed canvas is a
   //    window sliding over them).
-  //  - Vertical: [thin 2px][4px gap][thick 6px][13px gap] = 25px, tiled
+  //  - Vertical: [thin 2px][4px gap][thick 24px][13px gap] = 43px, tiled
   //    across the viewport width. (Unit derived from widths + gaps;
   //    vThick.spacing is the design-spec figure, not used in the tiling.)
   const H_UNIT = CONFIG.hLine.height + CONFIG.hLine.spacing;
@@ -309,7 +309,7 @@
   // Horizontal-line gradients cached by absolute line index. A line's two
   // endpoints depend only on its fixed y in the scroll field, so its gradient
   // never changes — cleared only on resize (gradient width = vw). Full-depth
-  // worst case is ~606 entries; trivial to hold.
+  // worst case is ~1334 entries; trivial to hold.
   const hGradCache = new Map();
   function hGradient(index, vw) {
     let g = hGradCache.get(index);
