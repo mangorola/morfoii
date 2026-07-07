@@ -1,0 +1,32 @@
+<!-- Chapter 04 — (no sefirah name; the frame shows only "04") -->
+<!-- Wrapper loaded into index.html via hash routing (#capitulo-04). -->
+<!-- No <script>: safe for innerHTML injection. The experience lives in
+     cap-04-kinetic.html — an iframe document, so its own JS (scroll-driven
+     kinetic line field, canvas rendering) runs normally. The iframe must be
+     allowed to scroll internally: vertical scroll IS the chapter's input
+     (same arrangement as cap-05 — note NO scrolling="no"). -->
+
+<style>
+  #cap-04-kinetic-wrap {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+  #cap-04-kinetic-wrap iframe {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: block;
+  }
+</style>
+
+<section id="cap-04-kinetic-wrap">
+  <iframe
+    src="cap-04-kinetic.html"
+    title="04 — campo cinético: del frío al calor"
+  ></iframe>
+</section>

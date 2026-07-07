@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04</title>
+
+<!-- Theme before first paint: same key + class contract as index.html. -->
+<script>
+  try {
+    if (localStorage.getItem('beLight.theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
+
+  /* Theme tokens — same names/values as index.html so both documents flip
+     together. --frame-fade is injected from CONFIG at boot; the value here is
+     a matching fallback. */
+  :root {
+    --bg: #FFFFFF;
+    --fg: #1a1a1a;
+    --fg-dim: rgba(26, 26, 26, 0.45);
+    --fg-faint: rgba(26, 26, 26, 0.22);
+    --line: #5E5E5E;
+    --line-w: 0.9px;
+    --frame-fade: 1500ms;
+  }
+  :root.dark {
+    --bg: #000000;
+    --fg: #ffffff;
+    --fg-dim: rgba(245, 245, 240, 0.5);
+    --fg-faint: rgba(245, 245, 240, 0.25);
+    --line: #2E2E2E;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* Unlike every other chapter this one SCROLLS: a 20000px surface whose
+     scroll position drives the paint. overflow-x is clipped so the full-bleed
+     field can never spawn a horizontal scrollbar. */
+  html, body {
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Space Grotesk', sans-serif;
+    transition: background 0.45s ease, color 0.45s ease;
+  }
+
+  /* === SVG board — frame lines + margin type ============================= */
+  /* Same coordinate contract as index.html: viewBox 0 0 1920 1080 with
+     "meet" scaling, the 4 frame lines only. UNIQUE to this chapter: the whole
+     board FADES OUT on entry to hand the screen to the kinetic field, and
+     fades back in only when the user returns to the very top (see JS). */
+  #board {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: block;
+    overflow: visible;   /* frame lines overshoot to the viewport edges */
+    z-index: 10;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity var(--frame-fade) ease-in-out;
+  }
+  #board.faded { opacity: 0; pointer-events: none; }
+  /* When faded the (invisible) controls must not swallow clicks or scroll. */
+  #board.faded .ctrl { pointer-events: none; }
+
+  #board .frame {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: var(--line-w);
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.45s ease;
+  }
+  #board text {
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .label-num { fill: var(--fg-dim); transition: fill 0.45s ease; }
+  .ctrl {
+    cursor: pointer;
+    pointer-events: all;
+    fill: var(--fg-dim);
+    transition: fill 0.3s ease;
+  }
+  .ctrl:hover, .ctrl:focus-visible { fill: var(--fg); }
+  .ctrl:focus { outline: none; }
+  .ctrl .hit { fill: transparent; stroke: none; }
+
+  /* === Kinetic field — full-bleed canvas ================================= */
+  /* Fixed to the viewport, repainted from scrollY. It IGNORES the inner frame
+     (fills 100vw × 100dvh). Sits above the vestigial artboard, below the board
+     so the hairlines stay crisp whenever the frame is shown. pointer-events
+     none so wheel/touch pass straight through to the scrolling document. */
+  #field {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: block;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* === Artboard / stage — scaffolding parity ============================= */
+  /* Present so this chapter shares the structure of every other chapter, but
+     VESTIGIAL here: the visible layer is the full-viewport #field above. They
+     hold the inner-stage rectangle behind the field (never seen while the
+     opaque field covers the viewport). Kept for consistency + so the frame's
+     coordinate system stays intact. */
+  #artboard {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 1920px;
+    height: 1080px;
+    transform: translate(-50%, -50%) scale(1);
+    z-index: 1;
+    pointer-events: none;
+  }
+  #stage {
+    position: absolute;
+    left: 80px;
+    top: 80px;
+    width: 1760px;
+    height: 920px;
+    overflow: hidden;
+    background: var(--bg);
+    transition: background 0.45s ease;
+  }
+
+  /* The scroll surface: a single full-width spacer that gives the document its
+     20000px height. Purely structural — it carries no pixels; every visible
+     mark is painted on #field. */
+  #scroll {
+    width: 100%;
+    height: 20000px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Frame + margin type: homepage coordinate system, frame lines only.
+     This chapter carries NO sefirah name — only the number "04" is shown
+     (no adjacent .label-name text element). -->
+<svg id="board" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
+  <!-- 4 "infinite" frame lines, overshooting the artboard on every side -->
+  <line class="frame" x1="-1000" y1="80"    x2="3000" y2="80"/>
+  <line class="frame" x1="-1000" y1="1000"  x2="3000" y2="1000"/>
+  <line class="frame" x1="80"    y1="-1000" x2="80"   y2="2080"/>
+  <line class="frame" x1="1840"  y1="-1000" x2="1840" y2="2080"/>
+
+  <!-- Chapter label, top-left margin — number only, this chapter has no name. -->
+  <text class="label-num" x="120" y="45" font-size="11">04</text>
+
+  <!-- Theme toggle, top-right margin. Same localStorage contract as the homepage. -->
+  <g class="ctrl" id="themeToggle" role="button" tabindex="0" aria-label="Cambiar tema">
+    <rect class="hit" x="1586" y="30" width="76" height="24"/>
+    <text id="themeToggleText" x="1655" y="46" font-size="11" text-anchor="end">○ LUZ</text>
+  </g>
+
+  <!-- Back to index, top-right margin -->
+  <g class="ctrl" id="backIndex" role="link" tabindex="0" aria-label="Volver al índice">
+    <rect class="hit" x="1670" y="30" width="140" height="24"/>
+    <text x="1800" y="46" font-size="11" text-anchor="end">← Índice</text>
+  </g>
+</svg>
+
+<!-- Full-bleed kinetic line field. -->
+<canvas id="field"></canvas>
+
+<!-- Vestigial scaffolding (see CSS): the inner frame rectangle behind the field. -->
+<div id="artboard"><div id="stage"></div></div>
+
+<!-- Scroll surface — gives the document its 20000px height. -->
+<div id="scroll"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // CONFIG — all tunables.
+  // =====================================================================
+  const CONFIG = {
+    artboard: { w: 1920, h: 1080 },
+    stage: { x: 80, y: 80, w: 1760, h: 920 },
+    scrollHeight: 20000,
+    palette: ['#8EABBF', '#C8D4D3', '#B7364C', '#F85794', '#F89626'],
+    seed: 42069,
+    vLinesRange: [8, 220],       // vertical line count at top vs bottom
+    hLinesRange: [4, 160],       // horizontal line count
+    thicknessRange: [0.5, 3],
+    opacityRange: [0.3, 1.0],
+    frameDelay: 800,             // ms before frame starts fading out
+    frameFade: 1500,             // ms fade duration
+    frameShowThreshold: 100,     // scrollY px — frame reappears below this
+
+    // --- extra tunables (beyond the brief, exposed for tweaking) ---------
+    colorJitter: 0.05,           // per-line wobble in palette-t so neighbours differ
+    dprCap: 1.5,                 // cap devicePixelRatio (performance)
+  };
+
+  const root = document.documentElement;
+  // Drive the board's fade duration from CONFIG (CSS reads --frame-fade).
+  root.style.setProperty('--frame-fade', CONFIG.frameFade + 'ms');
+
+  // =====================================================================
+  // Small math helpers.
+  // =====================================================================
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+  function smoothstep(t) { return t * t * (3 - 2 * t); }
+
+  // Seeded PRNG — same mulberry32 the rest of the codebase uses, so the field
+  // is identical on every reload. Re-seeded fresh each paint: because a paint
+  // draws a growing PREFIX of the same sequence, lines 0..N keep their exact
+  // place as the count grows — the field ACCUMULATES in place (fills in) as
+  // you scroll rather than sliding or reshuffling.
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // =====================================================================
+  // Palette — parse the 5 hex stops to [r,g,b] once; interpolate in RGB.
+  // =====================================================================
+  function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    return [
+      parseInt(h.slice(0, 2), 16),
+      parseInt(h.slice(2, 4), 16),
+      parseInt(h.slice(4, 6), 16),
+    ];
+  }
+  const PAL = CONFIG.palette.map(hexToRgb);
+  const scratch = [0, 0, 0];
+  // Map t in [0,1] across the palette (stops evenly spaced) into `out`.
+  function paletteColor(t, out) {
+    t = clamp(t, 0, 1);
+    const seg = t * (PAL.length - 1);
+    let i = Math.floor(seg);
+    if (i > PAL.length - 2) i = PAL.length - 2;
+    const f = seg - i;
+    const a = PAL[i], b = PAL[i + 1];
+    out[0] = a[0] + (b[0] - a[0]) * f;
+    out[1] = a[1] + (b[1] - a[1]) * f;
+    out[2] = a[2] + (b[2] - a[2]) * f;
+    return out;
+  }
+
+  // Per-line thickness / opacity: both grow from the cold, faint top to the
+  // dense, opaque bottom. Bands anchored to CONFIG so the ends stay tunable.
+  function lineThickness(p, r) {
+    const lo = CONFIG.thicknessRange[0] + p * (1.0 - CONFIG.thicknessRange[0]); // 0.5 -> 1
+    const hi = 1.0 + p * (CONFIG.thicknessRange[1] - 1.0);                       // 1 -> 3
+    return lo + r * (hi - lo);
+  }
+  function lineOpacity(p, r) {
+    const lo = CONFIG.opacityRange[0] + p * 0.4;                 // 0.3 -> 0.7
+    const hi = 0.6 + p * (CONFIG.opacityRange[1] - 0.6);         // 0.6 -> 1.0
+    return lo + r * (hi - lo);
+  }
+
+  // Build an rgb() string from the scratch colour (values are floats -> floor).
+  function rgbStr(c) {
+    return 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
+  }
+
+  // =====================================================================
+  // Canvas.
+  // =====================================================================
+  const canvas = document.getElementById('field');
+  const ctx = canvas.getContext('2d');
+  let bgColor = '#ffffff';
+
+  function refreshBg() {
+    bgColor = getComputedStyle(root).getPropertyValue('--bg').trim() || '#ffffff';
+  }
+
+  function resizeCanvas() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, CONFIG.dprCap);
+    canvas.width = Math.round(vw * dpr);
+    canvas.height = Math.round(vh * dpr);
+    canvas.style.width = vw + 'px';
+    canvas.style.height = vh + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // draw in CSS pixels
+    draw();
+  }
+
+  // One repaint: clear to --bg, then the accumulating grids of vertical and
+  // horizontal lines. The vertical count grows LINEARLY with scroll; the
+  // horizontal count grows on a SMOOTHSTEP curve (fastest through the middle)
+  // so a dense cross-hatch blooms in the warm-crimson centre. The interference
+  // between the two grids at different densities is the optical (moiré)
+  // movement — no animation loop, the scroll-driven repaint is the motion.
+  function draw() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const maxScroll = CONFIG.scrollHeight - vh;
+    const progress = maxScroll > 0 ? clamp(window.scrollY / maxScroll, 0, 1) : 0;
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, vw, vh);
+
+    // Vertical lines — count linear in progress, positions seeded-stable.
+    const nV = Math.round(lerp(CONFIG.vLinesRange[0], CONFIG.vLinesRange[1], progress));
+    const rv = mulberry32(CONFIG.seed);
+    for (let k = 0; k < nV; k++) {
+      const xFrac = rv();
+      const cJit = rv() * 2 - 1;
+      const tR = rv();
+      const oR = rv();
+      const x = xFrac * vw;
+      paletteColor(progress + cJit * CONFIG.colorJitter, scratch);
+      const thick = lineThickness(progress, tR);
+      ctx.globalAlpha = lineOpacity(progress, oR);
+      ctx.fillStyle = rgbStr(scratch);
+      ctx.fillRect(x - thick / 2, 0, thick, vh);
+    }
+
+    // Horizontal lines — count on a smoothstep curve, own seeded stream.
+    const nH = Math.round(lerp(CONFIG.hLinesRange[0], CONFIG.hLinesRange[1], smoothstep(progress)));
+    const rh = mulberry32(CONFIG.seed ^ 0x9E3779B9);
+    for (let k = 0; k < nH; k++) {
+      const yFrac = rh();
+      const cJit = rh() * 2 - 1;
+      const tR = rh();
+      const oR = rh();
+      const y = yFrac * vh;
+      paletteColor(progress + cJit * CONFIG.colorJitter, scratch);
+      const thick = lineThickness(progress, tR);
+      ctx.globalAlpha = lineOpacity(progress, oR);
+      ctx.fillStyle = rgbStr(scratch);
+      ctx.fillRect(0, y - thick / 2, vw, thick);
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  // Repaint is gated by a single rAF so a burst of scroll events coalesces
+  // into at most one paint per frame.
+  let scheduled = false;
+  function requestDraw() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(function () { scheduled = false; draw(); });
+  }
+
+  // =====================================================================
+  // Frame fade choreography.
+  //  - On entry the frame shows briefly, then fades out (revealing the field).
+  //  - It returns only after the user has gone down the surface and come back
+  //    to the very top (scrollY < threshold). `hasLeftTop` guards against the
+  //    entry position (also < threshold) snapping it straight back on, so the
+  //    reveal is not undone the instant it happens.
+  // =====================================================================
+  const board = document.getElementById('board');
+  let hasLeftTop = false;
+  function updateFrameVisibility() {
+    const y = window.scrollY;
+    if (y >= CONFIG.frameShowThreshold) {
+      hasLeftTop = true;
+      board.classList.add('faded');
+    } else if (hasLeftTop) {
+      board.classList.remove('faded');
+    }
+  }
+  // Entry: reveal the field after a beat.
+  setTimeout(function () { board.classList.add('faded'); }, CONFIG.frameDelay);
+
+  // =====================================================================
+  // Listeners.
+  // =====================================================================
+  window.addEventListener('scroll', function () {
+    updateFrameVisibility();
+    requestDraw();
+  }, { passive: true });
+
+  window.addEventListener('resize', resizeCanvas);
+  if ('ResizeObserver' in window) {
+    // The iframe may be sized after attach (no resize event for 0 -> size).
+    new ResizeObserver(resizeCanvas).observe(root);
+  }
+
+  // =====================================================================
+  // Artboard scale — mirrors the SVG "xMidYMid meet" so the (vestigial) stage
+  // shares the frame's coordinate system. Kept for scaffolding parity.
+  // =====================================================================
+  const artboard = document.getElementById('artboard');
+  function fit() {
+    const s = Math.min(
+      window.innerWidth / CONFIG.artboard.w,
+      window.innerHeight / CONFIG.artboard.h
+    );
+    if (s <= 0) return;
+    artboard.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // =====================================================================
+  // Back to index — hash change on the parent document, never a reload.
+  // =====================================================================
+  const backIndex = document.getElementById('backIndex');
+  function goHome() {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.location.hash = '#home';
+        return;
+      }
+    } catch (err) { /* cross-origin parent — fall through */ }
+    window.location.href = 'index.html#home';
+  }
+  backIndex.addEventListener('click', goHome);
+  backIndex.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+  });
+
+  // =====================================================================
+  // Theme toggle — discreet typographic control sharing index.html's contract:
+  // '.dark' on <html> + 'beLight.theme' in localStorage. On flip the canvas
+  // clear colour changes, so refresh --bg and repaint.
+  // =====================================================================
+  const themeToggle = document.getElementById('themeToggle');
+  const themeToggleText = document.getElementById('themeToggleText');
+  function syncTheme() {
+    themeToggleText.textContent = root.classList.contains('dark') ? '● OSC' : '○ LUZ';
+  }
+  function flipTheme() {
+    root.classList.toggle('dark');
+    try {
+      localStorage.setItem('beLight.theme',
+        root.classList.contains('dark') ? 'dark' : 'light');
+    } catch (e) { /* storage unavailable — theme still flips for this view */ }
+    syncTheme();
+    refreshBg();
+    draw();
+  }
+  themeToggle.addEventListener('click', flipTheme);
+  themeToggle.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipTheme(); }
+  });
+  syncTheme();
+
+  // Theme can change in another tab / the homepage — mirror it live.
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'beLight.theme') {
+      root.classList.toggle('dark', e.newValue === 'dark');
+      syncTheme();
+      refreshBg();
+      draw();
+    }
+  });
+
+  // =====================================================================
+  // Boot.
+  // =====================================================================
+  refreshBg();
+  resizeCanvas();   // sizes the buffer and paints the first frame
+})();
+</script>
+
+</body>
+</html>
