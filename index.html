@@ -19,8 +19,6 @@
     --node-fill: #A0A0A0;
     --node-text: #ffffff;
     --veiled-opacity: 0.35;
-    --tint-intensity: 0.18;
-    --tint-fade: 600ms;
   }
   :root.dark {
     --bg: #000000;
@@ -77,48 +75,13 @@
 
   /* Hairlines: geometry scales with the viewBox, but non-scaling-stroke
      keeps every line crisp at 1px on screen at any zoom or monitor size. */
-  #board .guide,
-  #board .frame,
-  #board .circle {
+  #board .frame {
     fill: none;
     stroke: var(--line);
     stroke-width: var(--line-w);
     vector-effect: non-scaling-stroke;
     pointer-events: none;
     transition: stroke 0.45s ease;
-  }
-
-  /* Invisible hover targets for the three circles. Placed FIRST in the SVG
-     (visually bottom, and any later pointer-enabled element — the nodes —
-     wins hit-testing), so the tints group can follow them as a sibling for
-     the pure-CSS :hover rules below. */
-  #board .hit {
-    fill: transparent;
-    stroke: none;
-    pointer-events: all;
-  }
-
-  /* Additive RGB tints — isolated group so the circles screen-blend with
-     EACH OTHER (overlaps trend toward white/secondary colours) before the
-     group composites normally onto the page background. */
-  #board .tints { isolation: isolate; }
-  #board .tint {
-    mix-blend-mode: screen;
-    fill-opacity: 0;
-    pointer-events: none;
-    transition: fill-opacity var(--tint-fade) ease;
-  }
-  #hit-left:hover   ~ .tints .tint-left   { fill-opacity: var(--tint-intensity); }
-  #hit-center:hover ~ .tints .tint-center { fill-opacity: var(--tint-intensity); }
-  #hit-right:hover  ~ .tints .tint-right  { fill-opacity: var(--tint-intensity); }
-  /* Touch devices have no mouseleave — a tap would latch the tint on
-     forever. No real hover capability → no hover tints at all. */
-  @media (hover: none) {
-    #hit-left:hover   ~ .tints .tint-left,
-    #hit-center:hover ~ .tints .tint-center,
-    #hit-right:hover  ~ .tints .tint-right {
-      fill-opacity: 0 !important;
-    }
   }
 
   /* === Nodes — SVG groups with direct click handlers ====================== */
@@ -134,8 +97,9 @@
   .node:focus-visible circle { transform: scale(1.1); }
   .node:focus { outline: none; }
   .node text {
-    fill: var(--node-text);
+    fill: #ffffff;
     font-family: 'Space Mono', monospace;
+    font-weight: 600;
     letter-spacing: 0.08em;
     text-anchor: middle;
     dominant-baseline: central;
@@ -162,53 +126,24 @@
     50%      { opacity: 0.6; }
   }
 
-  /* === Node 01 — rotating CMY disc ======================================= */
-  /* A foreignObject inside the node group: it lives in artboard coordinates
-     so it scales with the viewBox like everything else. Outer wrap handles
-     the hover scale, inner div spins — the SVG "01" label above stays static. */
-  /* The foreignObject is visual only — hit-testing inside a transformed,
-     viewBox-scaled foreignObject is unreliable (Chromium/Safari), so an
-     invisible SVG circle on top is the real click/hover target. */
-  .disc-node foreignObject { pointer-events: none; overflow: visible; }
-  .disc-node .disc-hit { fill: transparent; stroke: none; }
-  /* Fills the padded foreignObject and centres the disc — the padding is the
-     headroom that lets the hover scale grow without hitting the fO bounds. */
-  .disc-outer {
+  /* === Conic-gradient nodes ============================================= */
+  /* SVG has no conic gradient, so these nodes paint theirs in a plain <div>
+     inside a foreignObject (artboard coordinates, so it scales with the
+     viewBox like everything else). The foreignObject is visual only —
+     hit-testing inside a viewBox-scaled foreignObject is unreliable
+     (Chromium/Safari), so an invisible SVG circle on top is the real
+     click/hover target, and the number label is a separate SVG <text>. */
+  .conic-node foreignObject { pointer-events: none; overflow: visible; }
+  .conic-node .conic-hit { fill: transparent; stroke: none; }
+  .conic-fill {
     width: 100%;
     height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: visible;
-  }
-  .disc-wrap {
-    /* True disc diameter = foreignObject size ÷ discPad. */
-    width: calc(100% / var(--disc-pad, 1.5));
-    height: calc(100% / var(--disc-pad, 1.5));
     border-radius: 50%;
-    overflow: hidden;   /* clip the square spinning div to the disc shape */
     transform-origin: center;
     transition: transform 0.25s ease;
   }
-  .node:hover .disc-wrap,
-  .node:focus-visible .disc-wrap { transform: scale(1.1); }
-  .disc {
-    /* Oversized + negative margin: the blur's soft outer edge falls outside
-       the wrap's circular clip, so the disc rim stays sharp. Blur is in
-       artboard units — it scales with the viewBox like everything else. */
-    width: 140%;
-    height: 140%;
-    margin: -20%;
-    border-radius: 50%;
-    background: conic-gradient(#00FFFF, #FF00FF, #FFFF00, #00FFFF);
-    filter: blur(var(--disc-blur, 10px));
-    animation: discSpin var(--disc-spin, 6s) linear infinite;
-  }
-  @keyframes discSpin { to { transform: rotate(360deg); } }
-  .node.disc-node text { fill: #ffffff; }
-  @media (prefers-reduced-motion: reduce) {
-    .disc { animation: none; }
-  }
+  .node:hover .conic-fill,
+  .node:focus-visible .conic-fill { transform: scale(1.1); }
 
   /* === Titles — inside the SVG, in artboard coordinates =================== */
   .title {
@@ -332,51 +267,25 @@
     // (a portrait phone letterboxes ~1540 units; ultrawides ~2300).
     line: { color: '#5E5E5E', width: 0.9, overshoot: 5000 },
 
-    // Three overlapping circles — additive RGB light primaries. Tangent to
-    // the frame: top/bottom lines vertically, left/right lines horizontally.
-    circles: {
-      r: 460,
-      cy: 540,
-      cx: { left: 540, center: 960, right: 1380 },
-      // Additive hover hook: each circle tints with its primary on hover
-      // (pure CSS :hover); screen blending mixes overlap zones additively.
-      tint: { left: '#FF0000', center: '#00FF00', right: '#0000FF' },
-      tintIntensity: 0.18,  // 0..1 — hover fill opacity (subtle first pass)
-      tintFadeMs: 600,
-    },
-
-    // Guide lines.
-    guides: {
-      // 6 horizontals, full artboard width — tangent pairs bracketing the
-      // three node rows (top / middle / bottom).
-      horizontal: [335, 415, 500, 580, 666, 746],
-      // 3 verticals, frame-top to frame-bottom — tangent to circle edges.
-      vertical: { x: [500, 1000, 1420], y1: 80, y2: 1000 },
-    },
-
     // 11 nodes, positioned by centre. Node 11 (Da'ath) is veiled: lighter,
     // translucent, non-routing.
     nodes: {
-      r: 40,
-      fill: '#A0A0A0',     // light theme; dark theme in CSS
+      r: 40,               // default radius; items may override with their own r
+      fill: '#A0A0A0',     // fallback for nodes without a fillType (light; dark in CSS)
       veiledOpacity: 0.35,
       fontSize: 14,
-      discSpinS: 6,        // seconds per full turn of node 01's CMY disc
-      discBlur: 10,        // px (artboard units) — softens the CMY gradient
-      discPad: 1.5,        // foreignObject size ÷ disc diameter — room for the
-                           // hover scale so the circle never clips
+      // Each item carries its own geometry + fill. fillType ∈
+      // 'solid' | 'linear' | 'radial' | 'conic'; colours space evenly across
+      // the gradient. Numbers are assigned left→right and get re-mapped to
+      // chapter files later. Linear gradients render top→bottom.
       items: [
-        { num: '01', x: 270,  y: 540, disc: true },
-        { num: '02', x: 427,  y: 375 },
-        { num: '03', x: 427,  y: 706 },
-        { num: '04', x: 826,  y: 375 },
-        { num: '05', x: 826,  y: 706 },
-        { num: '06', x: 960,  y: 540 },
-        { num: '07', x: 1239, y: 375 },
-        { num: '08', x: 1239, y: 706 },
-        { num: '09', x: 1503, y: 540 },
-        { num: '10', x: 1662, y: 540 },
-        { num: '11', x: 625,  y: 540, veiled: true },
+        { num: '01', x: 417.68,  y: 441.60, r: 75.19, fillType: 'linear', colors: ['#C8D4D3', '#F89626'] },
+        { num: '02', x: 499.49,  y: 348.28, r: 21.77, fillType: 'radial', colors: ['#C8D4D3', '#8EABBF'] },
+        { num: '03', x: 734.29,  y: 790.29, r: 27.29, fillType: 'linear', colors: ['#F85794', '#F89626'] },
+        { num: '04', x: 837.29,  y: 300.29, r: 27.29, fillType: 'solid',  colors: ['#F85794'] },
+        { num: '05', x: 1224.92, y: 508.92, r: 56.92, fillType: 'conic',  colors: ['#B7364C', '#C8D4D3'] },
+        { num: '06', x: 1345.47, y: 746.47, r: 37.47, fillType: 'linear', colors: ['#8EABBF', '#F89626', '#8EABBF', '#F89626'] },
+        { num: '07', x: 1425.10, y: 533.91, r: 56.92, fillType: 'conic',  colors: ['#8EABBF', '#C8D4D3', '#B7364C', '#F85794', '#F89626'] },
       ],
     },
 
@@ -403,11 +312,6 @@
     + '--line-w:' + CONFIG.line.width + 'px;'
     + '--node-fill:' + CONFIG.nodes.fill + ';'
     + '--veiled-opacity:' + CONFIG.nodes.veiledOpacity + ';'
-    + '--tint-intensity:' + CONFIG.circles.tintIntensity + ';'
-    + '--tint-fade:' + CONFIG.circles.tintFadeMs + 'ms;'
-    + '--disc-spin:' + CONFIG.nodes.discSpinS + 's;'
-    + '--disc-blur:' + CONFIG.nodes.discBlur + 'px;'
-    + '--disc-pad:' + CONFIG.nodes.discPad + ';'
     + '}';
   document.head.appendChild(cfgStyle);
 
@@ -426,51 +330,7 @@
     return el;
   }
 
-  // --- Hover targets first: bottom of the paint order, and siblings BEFORE
-  //     the tints group so the CSS "#hit-X:hover ~ .tints .tint-X" rules work.
-  for (const key of ['left', 'center', 'right']) {
-    board.appendChild(svgEl('circle', {
-      class: 'hit', id: 'hit-' + key,
-      cx: CONFIG.circles.cx[key], cy: CONFIG.circles.cy, r: CONFIG.circles.r,
-    }));
-  }
-
-  // --- Additive RGB tints (isolated screen-blend group) -------------------
-  const tintGroup = svgEl('g', { class: 'tints' });
-  for (const key of ['left', 'center', 'right']) {
-    tintGroup.appendChild(svgEl('circle', {
-      class: 'tint tint-' + key,
-      cx: CONFIG.circles.cx[key], cy: CONFIG.circles.cy, r: CONFIG.circles.r,
-      fill: CONFIG.circles.tint[key],
-    }));
-  }
-  board.appendChild(tintGroup);
-
-  // --- 6 horizontal guide lines ("infinite": overshoot both sides so they
-  //     reach the real viewport edges on any aspect ratio) -----------------
   const OS = CONFIG.line.overshoot;
-  for (const y of CONFIG.guides.horizontal) {
-    board.appendChild(svgEl('line', {
-      class: 'guide', x1: -OS, y1: y, x2: CONFIG.artboard.w + OS, y2: y,
-    }));
-  }
-
-  // --- 3 vertical guide lines (frame top to frame bottom) -----------------
-  for (const x of CONFIG.guides.vertical.x) {
-    board.appendChild(svgEl('line', {
-      class: 'guide',
-      x1: x, y1: CONFIG.guides.vertical.y1,
-      x2: x, y2: CONFIG.guides.vertical.y2,
-    }));
-  }
-
-  // --- Three circle outlines ----------------------------------------------
-  for (const key of ['left', 'center', 'right']) {
-    board.appendChild(svgEl('circle', {
-      class: 'circle',
-      cx: CONFIG.circles.cx[key], cy: CONFIG.circles.cy, r: CONFIG.circles.r,
-    }));
-  }
 
   // --- Frame: 4 "infinite" lines, cross corners — overshoot past the
   //     artboard so they run edge-to-edge on any screen -------------------
@@ -479,38 +339,58 @@
   board.appendChild(svgEl('line', { class: 'frame', x1: CONFIG.frame.left, y1: -OS, x2: CONFIG.frame.left, y2: CONFIG.artboard.h + OS }));
   board.appendChild(svgEl('line', { class: 'frame', x1: CONFIG.frame.right, y1: -OS, x2: CONFIG.frame.right, y2: CONFIG.artboard.h + OS }));
 
-  // --- 11 nodes: SVG groups, click handlers attached directly -------------
+  // --- <defs>: one gradient per linear/radial node. solid nodes use a flat
+  //     fill and conic nodes paint a CSS conic-gradient in a foreignObject,
+  //     so neither needs an SVG gradient. Stops space evenly across the
+  //     node's colours regardless of count. ---------------------------------
+  const defs = svgEl('defs', {});
+  for (const n of CONFIG.nodes.items) {
+    if (n.fillType !== 'linear' && n.fillType !== 'radial') continue;
+    const grad = n.fillType === 'linear'
+      ? svgEl('linearGradient', { id: 'grad-node-' + n.num, x1: 0, y1: 0, x2: 0, y2: 1 })
+      : svgEl('radialGradient', { id: 'grad-node-' + n.num, cx: '50%', cy: '50%', r: '50%' });
+    const last = n.colors.length - 1;
+    n.colors.forEach((c, i) => {
+      const offset = last === 0 ? 0 : (i / last) * 100;
+      grad.appendChild(svgEl('stop', { offset: offset + '%', 'stop-color': c }));
+    });
+    defs.appendChild(grad);
+  }
+  board.appendChild(defs);
+
+  // --- Nodes: SVG groups, click handlers attached directly ----------------
   const nodeGroup = svgEl('g', { class: 'nodes' });
   for (const n of CONFIG.nodes.items) {
+    const r = n.r != null ? n.r : CONFIG.nodes.r;
+    const isConic = n.fillType === 'conic';
     const g = svgEl('g', {
-      class: 'node' + (n.veiled ? ' veiled' : '') + (n.disc ? ' disc-node' : ''),
+      class: 'node' + (n.veiled ? ' veiled' : '') + (isConic ? ' conic-node' : ''),
     });
-    if (n.disc) {
-      // Rotating CMY disc. The foreignObject is PADDED (discPad× the disc
-      // diameter) and centred on the node, so the hover scale has headroom
-      // and the circle never clips against the fO bounds. Inner divs:
-      // outer = centre + padding, wrap = hover scale + circular clip,
-      // disc = spin. Clicks bubble to this group's handler.
-      const foR = CONFIG.nodes.r * CONFIG.nodes.discPad;  // padded half-size
+    if (isConic) {
+      // No SVG conic gradient — paint it in a foreignObject <div>. A
+      // transparent circle on top is the real hit target (foreignObject
+      // hit-testing is unreliable); the label is layered as a separate <text>.
       const fo = svgEl('foreignObject', {
-        x: n.x - foR, y: n.y - foR, width: foR * 2, height: foR * 2,
+        x: n.x - r, y: n.y - r, width: r * 2, height: r * 2,
       });
-      const outer = document.createElement('div');
-      outer.className = 'disc-outer';
-      const wrap = document.createElement('div');
-      wrap.className = 'disc-wrap';
-      const disc = document.createElement('div');
-      disc.className = 'disc';
-      wrap.appendChild(disc);
-      outer.appendChild(wrap);
-      fo.appendChild(outer);
+      const fill = document.createElement('div');
+      fill.className = 'conic-fill';
+      fill.style.background = 'conic-gradient(' + n.colors.join(', ') + ')';
+      fo.appendChild(fill);
       g.appendChild(fo);
       // Reliable hit target on top of the visual-only foreignObject.
       g.appendChild(svgEl('circle', {
-        class: 'disc-hit', cx: n.x, cy: n.y, r: CONFIG.nodes.r,
+        class: 'conic-hit', cx: n.x, cy: n.y, r: r,
       }));
     } else {
-      g.appendChild(svgEl('circle', { cx: n.x, cy: n.y, r: CONFIG.nodes.r }));
+      // Inline fill so the per-node gradient/colour beats the stylesheet's
+      // --node-fill default; nodes without a fillType keep that grey default.
+      const circle = svgEl('circle', { cx: n.x, cy: n.y, r: r });
+      if (n.fillType === 'solid') circle.style.fill = n.colors[0];
+      else if (n.fillType === 'linear' || n.fillType === 'radial') {
+        circle.style.fill = 'url(#grad-node-' + n.num + ')';
+      }
+      g.appendChild(circle);
     }
     g.appendChild(svgEl('text', {
       x: n.x, y: n.y, 'font-size': CONFIG.nodes.fontSize,
