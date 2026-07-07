@@ -393,16 +393,16 @@
         <div class="slider-group">
           <span class="swatch" id="swatchA" aria-hidden="true"></span>
           <label for="opA" id="labelA">COLOR A</label>
-          <input type="range" id="opA" min="0" max="1" step="0.01" value="0.85">
+          <input type="range" id="opA" min="0" max="1" step="0.01" value="0.40">
         </div>
         <div class="slider-group">
           <label for="covA">COB.</label>
-          <input type="range" id="covA" min="0" max="1" step="0.01" value="0.35"
+          <input type="range" id="covA" min="0" max="1" step="0.01" value="0.68"
                  aria-label="Cobertura color A">
         </div>
         <div class="slider-group">
           <label for="cluA">GRUPO</label>
-          <input type="range" id="cluA" min="0" max="1" step="0.01" value="0.55"
+          <input type="range" id="cluA" min="0" max="1" step="0.01" value="1"
                  aria-label="Agrupación color A">
         </div>
       </div>
@@ -411,16 +411,16 @@
         <div class="slider-group">
           <span class="swatch" id="swatchB" aria-hidden="true"></span>
           <label for="opB" id="labelB">COLOR B</label>
-          <input type="range" id="opB" min="0" max="1" step="0.01" value="0.85">
+          <input type="range" id="opB" min="0" max="1" step="0.01" value="0.40">
         </div>
         <div class="slider-group">
           <label for="covB">COB.</label>
-          <input type="range" id="covB" min="0" max="1" step="0.01" value="0.30"
+          <input type="range" id="covB" min="0" max="1" step="0.01" value="0.56"
                  aria-label="Cobertura color B">
         </div>
         <div class="slider-group">
           <label for="cluB">GRUPO</label>
-          <input type="range" id="cluB" min="0" max="1" step="0.01" value="0.45"
+          <input type="range" id="cluB" min="0" max="1" step="0.01" value="1"
                  aria-label="Agrupación color B">
         </div>
       </div>
@@ -453,13 +453,13 @@
       minBrightness: 15,     // ignore near-black pixels (shadows)
       maxBrightness: 240,    // ignore near-white pixels (backgrounds)
     },
-    coverageA: 0.35,         // 35% of cells covered by color A
-    coverageB: 0.30,         // 30% of cells covered by color B
+    coverageA: 0.68,         // 68% of cells covered by color A
+    coverageB: 0.56,         // 56% of cells covered by color B
     defaultOpacityImg: 1.0,
-    defaultOpacityA: 0.85,
-    defaultOpacityB: 0.85,
-    defaultClusterA: 0.55,   // 0 = scattered noise, 1 = continental masses
-    defaultClusterB: 0.45,
+    defaultOpacityA: 0.40,
+    defaultOpacityB: 0.40,
+    defaultClusterA: 1.0,    // 0 = scattered noise, 1 = continental masses
+    defaultClusterB: 1.0,
     hoverRadius: 3,          // colour-brush radius, in grid cells
     hoverFalloff: true,      // true = smooth fade to the radius edge;
                              // false = hard edge; a number = falloff
@@ -975,21 +975,30 @@
   hoverBtn.addEventListener('click', function () { setHover(!hoverMode); });
   setHover(CONFIG.hoverDefaultOn);
 
-  // Pre-stamp a deterministic scattered set of cells for the default state.
-  // These indices carve reveal windows into the colour plates.
-  const defaultStamps = [];
-  const stampRng = function(i) {
-    let n = Math.imul(i, 374761393) ^ 0xA5A5A5A5;
-    n = Math.imul(n ^ (n >>> 13), 1274126177);
-    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
-  };
-  for (let i = 0; i < N; i++) {
-    if (stampRng(i) < 0.12) defaultStamps.push(i);
+  // Pre-stamp a deterministic set of cells for the default state — these
+  // carve reveal windows into the colour plates so the chapter opens dense,
+  // not on a flat field of colour. A seeded value-noise field (same machinery
+  // as the plates) groups the windows into coherent blocks spread across the
+  // whole grid; STAMP_COVERAGE controls how much image shows through and
+  // STAMP_PERIOD the window grain (smaller = more, tighter windows).
+  const STAMP_COVERAGE = 0.22;   // fraction of cells revealed on boot
+  const STAMP_PERIOD = 2.4;      // noise period in cells
+  const STAMP_SEED = 20250705;
+  const stampVal = new Float64Array(N);
+  const stampOrder = new Array(N);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const i = r * COLS + c;
+      stampOrder[i] = i;
+      stampVal[i] = valueNoise(c / STAMP_PERIOD, r / STAMP_PERIOD, STAMP_SEED);
+    }
   }
-  defaultStamps.forEach(function(i) {
-    stamped.add(i);
-    setCellW(i, 1);
-  });
+  stampOrder.sort(function (a, b) { return stampVal[b] - stampVal[a]; });
+  const stampCount = Math.round(N * STAMP_COVERAGE);
+  for (let i = 0; i < stampCount; i++) {
+    stamped.add(stampOrder[i]);
+    setCellW(stampOrder[i], 1);
+  }
 
   // Hover-radius slider (RADIO) — 1 (precision, single cell) up to the
   // CONFIG maximum, whole steps, defaulting to the max. Updates live.
