@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 — PATH</title>
+
+<!-- Theme before first paint: same key + class contract as index.html. -->
+<script>
+  try {
+    if (localStorage.getItem('beLight.theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
+
+  /* Theme tokens — same names as index.html so both documents flip together.
+     Extra tokens: --stage-bg (field behind the grid), --panel-bg (tools panel),
+     --cell-bg / --grid-gap (the light field the pigment filters). */
+  :root {
+    --bg: #FAFAF8;
+    --stage-bg: #FFFFFF;
+    --panel-bg: rgba(255, 255, 255, 0.97);
+    --fg: #1a1a1a;
+    --fg-dim: rgba(26, 26, 26, 0.5);
+    --fg-faint: rgba(26, 26, 26, 0.22);
+    --line: #5E5E5E;
+    --line-w: 0.9px;
+    --cell-bg: #FFFFFF;
+    --grid-gap: #E7E7E1;
+  }
+  :root.dark {
+    --bg: #000000;
+    --stage-bg: #0C0C0C;
+    --panel-bg: rgba(10, 10, 10, 0.97);
+    --fg: #ffffff;
+    --fg-dim: rgba(245, 245, 240, 0.55);
+    --fg-faint: rgba(245, 245, 240, 0.25);
+    --line: #2E2E2E;
+    --cell-bg: #0E0E0E;
+    --grid-gap: #1F1F1F;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Space Grotesk', sans-serif;
+    transition: background 0.45s ease, color 0.45s ease;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* === Artboard — HTML twin of the SVG coordinate system ================= */
+  /* A fixed 1920×1080 div, centred and scaled by JS with the same
+     min(vw/1920, vh/1080) math as the SVG's "xMidYMid meet", so the canvas
+     and tools panel can never drift from the frame drawn in the SVG. */
+  #artboard {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 1920px;
+    height: 1080px;
+    transform: translate(-50%, -50%) scale(1);
+    transform-origin: center center;
+    z-index: 1;
+  }
+
+  /* Inner stage: the frame rectangle (80,80 → 1840,1000 = 1760×920). */
+  #stage {
+    position: absolute;
+    left: 80px;
+    top: 80px;
+    width: 1760px;
+    height: 920px;
+    overflow: hidden;
+    background: var(--stage-bg);
+    transition: background 0.45s ease;
+  }
+  /* The light field the pigment filters. Positioned + sized by JS. */
+  #grid {
+    position: absolute;
+    display: block;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    image-rendering: auto;
+    cursor: crosshair;
+  }
+
+  /* === SVG board — frame lines + margin type ============================= */
+  #board {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: block;
+    overflow: visible;
+    z-index: 10;
+    pointer-events: none;
+  }
+  #board .frame {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: var(--line-w);
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.45s ease;
+  }
+  #board text {
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .label-num  { fill: var(--fg-dim); transition: fill 0.45s ease; }
+  .label-name { fill: var(--fg);     transition: fill 0.45s ease; }
+  .ctrl {
+    cursor: pointer;
+    pointer-events: all;
+    fill: var(--fg-dim);
+    transition: fill 0.3s ease;
+  }
+  .ctrl:hover, .ctrl:focus-visible { fill: var(--fg); }
+  .ctrl:focus { outline: none; }
+  .ctrl .hit { fill: transparent; stroke: none; }
+
+  /* === Tools panel — bottom margin, slides up ============================ */
+  /* Lives inside the scaled artboard so it aligns with the frame and flips
+     with the theme. Bottom-anchored: opening grows the body UPWARD. */
+  #tools {
+    position: absolute;
+    left: 80px;
+    right: 80px;
+    bottom: 22px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Space Mono', monospace;
+    align-items: stretch;
+  }
+  #toolsBody {
+    order: 1;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    background: var(--panel-bg);
+    border: var(--line-w) solid var(--line);
+    border-bottom: none;
+    transition: max-height 0.42s cubic-bezier(0.4, 0, 0.1, 1), opacity 0.3s ease;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  #tools.open #toolsBody {
+    max-height: 460px;
+    opacity: 1;
+  }
+  #toolsInner {
+    padding: 18px 22px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+  }
+  #toolsTab {
+    order: 2;
+    align-self: center;
+    padding: 6px 22px;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    background: var(--panel-bg);
+    border: var(--line-w) solid var(--line);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.3s ease;
+    white-space: nowrap;
+  }
+  #toolsTab:hover { color: var(--fg); }
+
+  /* Rows + groups */
+  .trow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+  }
+  .trow.hidden { display: none; }
+  .tgroup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .tsep { width: var(--line-w); height: 16px; background: var(--line); opacity: 0.7; }
+  .tlabel {
+    font-size: 9.5px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--fg-faint);
+    white-space: nowrap;
+  }
+
+  /* Typographic buttons — no chrome, active = full weight/underline */
+  .tbtn {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    background: none;
+    border: none;
+    padding: 3px 1px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+    position: relative;
+  }
+  .tbtn:hover:not(:disabled) { color: var(--fg); }
+  .tbtn.active { color: var(--fg); }
+  .tbtn.active::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -2px;
+    height: 1px;
+    background: var(--fg);
+  }
+  .tbtn:disabled { opacity: 0.3; cursor: default; }
+  .tbtn.glyph { font-size: 13px; letter-spacing: 0; padding: 3px 5px; }
+  .tbtn:focus-visible { outline: 1px solid var(--fg-faint); outline-offset: 2px; }
+
+  /* Sliders — hairline track, small round thumb */
+  .tval {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--fg-dim);
+    min-width: 34px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  input[type=range].trange {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 108px;
+    height: 1px;
+    background: var(--fg-faint);
+    cursor: pointer;
+    outline: none;
+  }
+  input[type=range].trange::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--fg);
+    border: none;
+  }
+  input[type=range].trange::-moz-range-thumb {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--fg);
+    border: none;
+  }
+  input[type=range].trange.stepped { width: 84px; }
+
+  /* Pigment swatches — the palette needs colour; keep them small + flat */
+  .swatches { display: flex; gap: 7px; }
+  .swatch {
+    width: 15px; height: 15px;
+    border: var(--line-w) solid var(--fg-faint);
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    transition: transform 0.15s ease;
+  }
+  .swatch:hover { transform: scale(1.12); }
+  .swatch.active { outline: 1px solid var(--fg); outline-offset: 2px; }
+  .preview-sw {
+    width: 15px; height: 15px;
+    border: var(--line-w) solid var(--fg-faint);
+    flex-shrink: 0;
+  }
+
+  /* Deposit stepped control — ticks behind a range input */
+  .stepped-wrap { position: relative; display: flex; align-items: center; height: 16px; }
+  .stepped-ticks {
+    position: absolute; inset: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 3px; pointer-events: none;
+  }
+  .tick { width: 1px; height: 8px; background: var(--fg-faint); }
+  .tick.on { background: var(--fg); height: 13px; }
+
+  /* Keyframe timeline */
+  #timeline { align-items: center; gap: 6px; }
+  .kf {
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .kf .kf-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 0.1em;
+    color: var(--fg-dim); background: none; border: var(--line-w) solid var(--fg-faint);
+    width: 22px; height: 20px; cursor: pointer; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+  .kf .kf-num:hover { color: var(--fg); }
+  .kf .kf-num.active { color: var(--fg); border-color: var(--fg); }
+  .kf .kf-del {
+    font-size: 11px; line-height: 1; color: var(--fg-faint);
+    background: none; border: none; cursor: pointer; padding: 0 2px;
+    transition: color 0.2s ease;
+  }
+  .kf .kf-del:hover { color: var(--fg); }
+  .kf-link { width: 8px; height: var(--line-w); background: var(--fg-faint); }
+</style>
+</head>
+<body>
+
+<div id="artboard">
+  <div id="stage">
+    <canvas id="grid"></canvas>
+  </div>
+
+  <!-- Tools panel: collapsed = tab only; opens upward over the lower stage -->
+  <div id="tools">
+    <div id="toolsBody">
+      <div id="toolsInner">
+
+        <!-- Row A: tool · history · view · clear (always present) -->
+        <div class="trow">
+          <div class="tgroup">
+            <span class="tlabel">Tool</span>
+            <button class="tbtn" data-mode="paint">Paint</button>
+            <button class="tbtn" data-mode="erase">Erase</button>
+            <button class="tbtn" data-mode="select">Animate</button>
+          </div>
+          <div class="tsep"></div>
+          <div class="tgroup">
+            <button class="tbtn glyph" id="undoBtn" title="Deshacer (Ctrl+Z)">↶</button>
+            <button class="tbtn glyph" id="redoBtn" title="Rehacer (Ctrl+Y)">↷</button>
+          </div>
+          <div class="tsep"></div>
+          <div class="tgroup">
+            <span class="tlabel">View</span>
+            <button class="tbtn" data-view="grid">Grid</button>
+            <button class="tbtn" data-view="pixel">Pixel</button>
+            <button class="tbtn" data-view="smooth">Smooth</button>
+          </div>
+          <div class="tsep"></div>
+          <button class="tbtn" id="clearBtn">Clear</button>
+        </div>
+
+        <!-- Row B: paint / erase brush controls -->
+        <div class="trow" id="rowBrush">
+          <button class="tbtn" id="dragBtn">Drag · Off</button>
+          <div class="tsep"></div>
+          <div class="tgroup">
+            <span class="tlabel">Brush</span>
+            <input type="range" class="trange" id="brushRange" min="0.5" max="3" step="0.1">
+            <span class="tval" id="brushVal">0.8×</span>
+          </div>
+        </div>
+
+        <!-- Row C: paint pigment / density / deposit -->
+        <div class="trow" id="rowPaint">
+          <div class="tgroup">
+            <span class="tlabel">Pigment</span>
+            <div class="swatches" id="swatches"></div>
+          </div>
+          <div class="tsep"></div>
+          <div class="tgroup">
+            <span class="tlabel">Density</span>
+            <input type="range" class="trange" id="densityRange" min="0.1" max="1" step="0.05">
+            <span class="tval" id="densityVal">90%</span>
+          </div>
+          <div class="tsep"></div>
+          <div class="tgroup">
+            <span class="tlabel">Deposit</span>
+            <div class="stepped-wrap">
+              <div class="stepped-ticks" id="depositTicks"></div>
+              <input type="range" class="trange stepped" id="depositRange" min="0" max="4" step="1">
+            </div>
+            <div class="preview-sw" id="depositPreview"></div>
+          </div>
+        </div>
+
+        <!-- Row D: smooth diffusion -->
+        <div class="trow" id="rowSmooth">
+          <div class="tgroup">
+            <span class="tlabel">Diffusion</span>
+            <input type="range" class="trange" id="smoothRange" min="1" max="8" step="0.5">
+            <span class="tval" id="smoothVal">3.0</span>
+          </div>
+        </div>
+
+        <!-- Row E: animate controls -->
+        <div class="trow" id="rowAnim">
+          <div class="tgroup">
+            <button class="tbtn" id="selectAllBtn">Select All</button>
+            <button class="tbtn" id="deselectBtn">Deselect</button>
+            <button class="tbtn" id="commitBtn">Commit</button>
+          </div>
+          <div class="tsep"></div>
+          <div class="tgroup">
+            <button class="tbtn" id="addKfBtn">+ Keyframe</button>
+            <button class="tbtn" id="updateKfBtn">Update</button>
+          </div>
+          <div class="tsep"></div>
+          <div class="tgroup">
+            <button class="tbtn glyph" id="playBtn" title="Reproducir">▶</button>
+            <button class="tbtn glyph" id="pauseBtn" title="Pausar">⏸</button>
+            <button class="tbtn glyph" id="stopBtn" title="Detener">⏹</button>
+          </div>
+          <div class="tsep"></div>
+          <div class="tgroup">
+            <span class="tlabel">Speed</span>
+            <input type="range" class="trange" id="speedRange" min="200" max="3000" step="100">
+            <span class="tval" id="speedVal">1.0s</span>
+          </div>
+          <div class="tsep"></div>
+          <button class="tbtn" id="loopBtn">Loop · Off</button>
+          <button class="tbtn" id="clearKfBtn">Clear All</button>
+          <span class="tval" id="animInfo" style="min-width:auto"></span>
+        </div>
+
+        <!-- Row F: keyframe timeline -->
+        <div class="trow" id="rowTimeline">
+          <span class="tlabel">Timeline</span>
+          <div class="trow" id="timeline"></div>
+        </div>
+
+      </div>
+    </div>
+    <div id="toolsTab" role="button" tabindex="0" aria-expanded="false">▲ Tools</div>
+  </div>
+</div>
+
+<svg id="board" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet"
+     xmlns="http://www.w3.org/2000/svg" aria-hidden="false">
+
+  <!-- Frame lines: overshoot the artboard to reach the viewport edges. -->
+  <line class="frame" x1="-1000" y1="80"    x2="3000" y2="80"/>
+  <line class="frame" x1="-1000" y1="1000"  x2="3000" y2="1000"/>
+  <line class="frame" x1="80"    y1="-1000" x2="80"   y2="2080"/>
+  <line class="frame" x1="1840"  y1="-1000" x2="1840" y2="2080"/>
+
+  <!-- Chapter label, top-left margin -->
+  <text class="label-num"  x="120" y="45" font-size="11">03</text>
+  <text class="label-name" x="162" y="45" font-size="11">PATH</text>
+
+  <!-- Theme toggle, top-right margin (left of the back control) -->
+  <g class="ctrl" id="themeToggle" role="button" tabindex="0" aria-label="Cambiar tema">
+    <rect class="hit" x="1586" y="30" width="76" height="24"/>
+    <text id="themeToggleText" x="1655" y="46" font-size="11" text-anchor="end">○ LUZ</text>
+  </g>
+
+  <!-- Back to index, top-right margin -->
+  <g class="ctrl" id="backIndex" role="link" tabindex="0" aria-label="Volver al índice">
+    <rect class="hit" x="1670" y="30" width="140" height="24"/>
+    <text x="1800" y="46" font-size="11" text-anchor="end">← Índice</text>
+  </g>
+</svg>
+
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // CONFIG — every tunable in one place.
+  // Ported from morfo/src/app/components/ColorBlendGrid.tsx (subtractive
+  // pigment mixing: white light filtered through coloured acrylic sheets).
+  // =====================================================================
+  const CONFIG = {
+    gridRows: 12,
+    gridCols: 20,
+    stageW: 1760,               // inner stage — must match the frame
+    stageH: 920,
+    gridPad: 48,                // air between the grid and the frame
+
+    // Pigments: subtractive primaries + red/blue acrylics. displayColor is
+    // the swatch shown in the palette (the pure pigment, not the filtered mix).
+    pigments: [
+      { name: 'Cyan',    type: 'cyan',    display: 'rgb(0,255,255)' },
+      { name: 'Magenta', type: 'magenta', display: 'rgb(255,0,255)' },
+      { name: 'Yellow',  type: 'yellow',  display: 'rgb(255,255,0)' },
+      { name: 'Red',     type: 'red',     display: 'rgb(255,0,0)' },
+      { name: 'Blue',    type: 'blue',    display: 'rgb(0,0,255)' },
+    ],
+    // Deposit strength scale (Soft → Saturated) — how much pigment a stroke lays.
+    depositScale: [0.15, 0.25, 0.4, 0.6, 0.9],
+
+    brushMin: 0.5, brushMax: 3,
+    densityMin: 0.1, densityMax: 1,
+    smoothMin: 1, smoothMax: 8,
+    speedMin: 200, speedMax: 3000,
+
+    brushRadiusMult: 3,         // brush radius (cells) = brushSize × this
+    falloffPow: 1.5,            // brush edge softness exponent
+    pixelsPerRow: 30,           // vertical drag distance for 1 row of shift
+    historyLimit: 50,
+    hoverPopScale: 1.10,        // select-mode cell pop under the cursor
+    smoothBlurMult: 2,          // CSS blur px = smoothness × this
+    maxQuality: 2,              // canvas backing pixel-ratio cap
+
+    // Theme-dependent cell rendering. Light = the original white light field.
+    // Dark = the field starts near the stage; pigment "lights it up".
+    darkCellBg: [14, 14, 14],
+  };
+
+  const ROWS = CONFIG.gridRows, COLS = CONFIG.gridCols;
+  const EMPTY = () => ({ cyan: 0, magenta: 0, yellow: 0, red: 0, blue: 0 });
+
+  // =====================================================================
+  // State — the React component's useState set, flattened into one object.
+  // =====================================================================
+  const S = {
+    mode: 'paint',              // paint | erase | select(animate)
+    view: 'grid',               // grid | pixel | smooth
+    pigment: 'cyan',
+    brush: 0.8,
+    density: 0.9,
+    depositIndex: 3,            // default Very Strong
+    smoothness: 3,
+    dragPaint: false,
+
+    cells: new Map(),           // cellIndex -> pigments
+    history: [new Map()],
+    hIndex: 0,
+
+    hoverCell: null,
+    painting: false,
+    stroke: null,               // in-progress paint stroke snapshot
+
+    // Animate / column displacement
+    selectedCols: new Set(),
+    colDisp: new Map(),         // col -> integer row shift
+    dragging: false,
+    dragStartY: null,
+    dragStartDisp: 0,
+    preview: 0,
+    draggedCol: null,
+
+    // Keyframes
+    keyframes: [],              // { id, disp: Map }
+    selKf: null,
+    animating: false,
+    progress: 0,
+    kfDur: 1000,
+    loop: false,
+    animStart: 0,
+  };
+
+  const root = document.documentElement;
+  const isDark = () => root.classList.contains('dark');
+
+  // =====================================================================
+  // Colour model — subtractive mixing (white light through acrylics).
+  // Returns [r,g,b] ints 0..255. Identical maths to the source component.
+  // =====================================================================
+  function pigmentsToRgb(p, density) {
+    let r = 1, g = 1, b = 1;
+    r *= (1 - Math.min(p.cyan, 1) * density);        // cyan absorbs red
+    g *= (1 - Math.min(p.magenta, 1) * density);     // magenta absorbs green
+    b *= (1 - Math.min(p.yellow, 1) * density);      // yellow absorbs blue
+    const rd = Math.min(p.red, 1) * density;         // red absorbs green+blue
+    g *= (1 - rd * 0.8); b *= (1 - rd * 0.8);
+    const bl = Math.min(p.blue, 1) * density;        // blue absorbs red+green
+    r *= (1 - bl * 0.8); g *= (1 - bl * 0.8);
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+
+  // Final on-screen colour for a cell. Light mode = the pure filtered colour
+  // (original behaviour). Dark mode = reveal from the near-black field by how
+  // much pigment is present, so painting reads as bringing light.
+  function cellColorStr(p) {
+    const rgb = pigmentsToRgb(p, S.density);
+    if (!isDark()) return 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+    const s = Math.min(1, Math.max(p.cyan, p.magenta, p.yellow, p.red, p.blue));
+    const bg = CONFIG.darkCellBg;
+    const r = Math.round(bg[0] + (rgb[0] - bg[0]) * s);
+    const g = Math.round(bg[1] + (rgb[1] - bg[1]) * s);
+    const b = Math.round(bg[2] + (rgb[2] - bg[2]) * s);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
+  const getCell = (i) => S.cells.get(i) || EMPTY();
+
+  // =====================================================================
+  // Column displacement (Animate mode). A column can be shifted vertically,
+  // wrapping around; keyframes interpolate these shifts over time.
+  // =====================================================================
+  function getColumnDisplacement(col) {
+    if (S.animating && S.keyframes.length >= 2) {
+      const total = S.keyframes.length - 1;
+      const sp = S.progress * total;
+      const seg = Math.floor(sp);
+      const local = sp - seg;
+      const from = Math.min(seg, S.keyframes.length - 2);
+      const to = from + 1;
+      const a = S.keyframes[from].disp.get(col) || 0;
+      const b = S.keyframes[to].disp.get(col) || 0;
+      return Math.round(a + (b - a) * local);
+    }
+    if (S.dragging && S.selectedCols.has(col)) return S.preview;
+    return S.colDisp.get(col) || 0;
+  }
+
+  function getCellPigmentsWithShift(row, col) {
+    const d = getColumnDisplacement(col);
+    if (d === 0) return getCell(row * COLS + col);
+    let src = (row - d) % ROWS;
+    if (src < 0) src += ROWS;
+    return getCell(src * COLS + col);
+  }
+
+  // =====================================================================
+  // Grid geometry — computed once; square cells centred in the stage.
+  // =====================================================================
+  let cellSize, gridW, gridH, offX, offY;
+  function computeGeometry() {
+    const availW = CONFIG.stageW - CONFIG.gridPad * 2;
+    const availH = CONFIG.stageH - CONFIG.gridPad * 2;
+    cellSize = Math.min(availW / COLS, availH / ROWS);
+    gridW = cellSize * COLS;
+    gridH = cellSize * ROWS;
+    offX = (CONFIG.stageW - gridW) / 2;
+    offY = (CONFIG.stageH - gridH) / 2;
+  }
+
+  const canvas = document.getElementById('grid');
+  const ctx = canvas.getContext('2d');
+  let q = 1;
+
+  function layout() {
+    const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    document.getElementById('artboard').style.transform =
+      'translate(-50%, -50%) scale(' + scale + ')';
+
+    q = Math.max(0.5, Math.min(CONFIG.maxQuality, scale * (window.devicePixelRatio || 1)));
+    canvas.width = Math.round(gridW * q);
+    canvas.height = Math.round(gridH * q);
+    canvas.style.width = gridW + 'px';
+    canvas.style.height = gridH + 'px';
+    canvas.style.left = offX + 'px';
+    canvas.style.top = offY + 'px';
+    scheduleDraw();
+  }
+
+  // =====================================================================
+  // Rendering — one canvas serves grid / pixel / smooth. Cheap enough
+  // (240 cells) to redraw on every hover; a dirty flag coalesces to one rAF.
+  // =====================================================================
+  function roundRect(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function previewPigments(row, col, base) {
+    // Brush hover preview (paint/erase), mirrors getCellColor(includePreview).
+    if (S.hoverCell === null || S.dragging) return base;
+    if (S.mode !== 'paint' && S.mode !== 'erase') return base;
+    const hr = Math.floor(S.hoverCell / COLS);
+    const hc = S.hoverCell % COLS;
+    const radius = S.brush * CONFIG.brushRadiusMult;
+    const dist = Math.sqrt((row - hr) * (row - hr) + (col - hc) * (col - hc));
+    if (dist > radius) return base;
+    const influence = Math.max(0, 1 - Math.pow(dist / radius, CONFIG.falloffPow));
+    const p = Object.assign({}, base);
+    if (S.mode === 'paint') {
+      const dep = CONFIG.depositScale[S.depositIndex] * influence * S.density;
+      p[S.pigment] = Math.min(1, p[S.pigment] + dep);
+    } else {
+      const e = influence;
+      p.cyan *= (1 - e); p.magenta *= (1 - e); p.yellow *= (1 - e);
+      p.red *= (1 - e); p.blue *= (1 - e);
+    }
+    return p;
+  }
+
+  let needsDraw = false;
+  function scheduleDraw() {
+    if (needsDraw) return;
+    needsDraw = true;
+    requestAnimationFrame(() => { needsDraw = false; draw(); });
+  }
+
+  function draw() {
+    ctx.setTransform(q, 0, 0, q, 0, 0);
+    ctx.clearRect(0, 0, gridW, gridH);
+
+    const gridMode = S.view === 'grid';
+    if (gridMode) {
+      ctx.fillStyle = getComputedStyle(root).getPropertyValue('--grid-gap').trim() || '#E7E7E1';
+      ctx.fillRect(0, 0, gridW, gridH);
+    }
+    const inset = gridMode ? Math.max(1.5, cellSize * 0.055) : 0;
+    const radius = gridMode ? cellSize * 0.09 : 0;
+
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        let p = getCellPigmentsWithShift(row, col);
+        p = previewPigments(row, col, p);
+        ctx.fillStyle = cellColorStr(p);
+        const x = col * cellSize, y = row * cellSize;
+        if (gridMode) {
+          roundRect(x + inset / 2, y + inset / 2, cellSize - inset, cellSize - inset, radius);
+        } else {
+          ctx.fillRect(x, y, cellSize + 0.5, cellSize + 0.5);
+        }
+      }
+    }
+
+    // Animate mode overlays: selected columns + hover pop.
+    if (S.mode === 'select') {
+      ctx.strokeStyle = getComputedStyle(root).getPropertyValue('--fg-faint').trim() || 'rgba(0,0,0,0.22)';
+      ctx.lineWidth = 1.5;
+      S.selectedCols.forEach((col) => {
+        ctx.strokeRect(col * cellSize + 0.75, 0.75, cellSize - 1.5, gridH - 1.5);
+      });
+      if (S.hoverCell !== null && !S.dragging) {
+        const hr = Math.floor(S.hoverCell / COLS);
+        const hc = S.hoverCell % COLS;
+        const p = getCellPigmentsWithShift(hr, hc);
+        const g = CONFIG.hoverPopScale;
+        const cx = hc * cellSize + cellSize / 2;
+        const cy = hr * cellSize + cellSize / 2;
+        const w = cellSize * g, h = cellSize * g;
+        ctx.fillStyle = cellColorStr(p);
+        ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
+      }
+    }
+
+    canvas.style.filter = S.view === 'smooth'
+      ? 'blur(' + (S.smoothness * CONFIG.smoothBlurMult) + 'px)'
+      : 'none';
+  }
+
+  // =====================================================================
+  // History (cell pigments only, matching the source).
+  // =====================================================================
+  function cloneCells(map) {
+    const m = new Map();
+    map.forEach((v, k) => m.set(k, Object.assign({}, v)));
+    return m;
+  }
+  function saveHistory(map) {
+    const h = S.history.slice(0, S.hIndex + 1);
+    h.push(cloneCells(map));
+    if (h.length > CONFIG.historyLimit) h.shift();
+    S.history = h;
+    S.hIndex = h.length - 1;
+    renderPanel();
+  }
+  function undo() {
+    if (S.hIndex <= 0) return;
+    S.hIndex--;
+    S.cells = cloneCells(S.history[S.hIndex]);
+    scheduleDraw(); renderPanel();
+  }
+  function redo() {
+    if (S.hIndex >= S.history.length - 1) return;
+    S.hIndex++;
+    S.cells = cloneCells(S.history[S.hIndex]);
+    scheduleDraw(); renderPanel();
+  }
+
+  // =====================================================================
+  // Painting / erasing.
+  // =====================================================================
+  function applyPaint(index, target) {
+    const cr = Math.floor(index / COLS);
+    const cc = index % COLS;
+    const radius = S.brush * CONFIG.brushRadiusMult;
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const dist = Math.sqrt((row - cr) * (row - cr) + (col - cc) * (col - cc));
+        if (dist > radius) continue;
+        const idx = row * COLS + col;
+        const cur = target.get(idx) || EMPTY();
+        const influence = Math.max(0, 1 - Math.pow(dist / radius, CONFIG.falloffPow));
+        if (S.mode === 'paint') {
+          const dep = CONFIG.depositScale[S.depositIndex] * influence * S.density;
+          const np = Object.assign({}, cur);
+          np[S.pigment] = Math.min(1, cur[S.pigment] + dep);
+          target.set(idx, np);
+        } else {
+          const e = influence;
+          const np = {
+            cyan: cur.cyan * (1 - e), magenta: cur.magenta * (1 - e),
+            yellow: cur.yellow * (1 - e), red: cur.red * (1 - e), blue: cur.blue * (1 - e),
+          };
+          if (np.cyan > 0.001 || np.magenta > 0.001 || np.yellow > 0.001 ||
+              np.red > 0.001 || np.blue > 0.001) target.set(idx, np);
+          else target.delete(idx);
+        }
+      }
+    }
+  }
+
+  function pointerToIndex(e) {
+    const rect = canvas.getBoundingClientRect();
+    let col = Math.floor(((e.clientX - rect.left) / rect.width) * COLS);
+    let row = Math.floor(((e.clientY - rect.top) / rect.height) * ROWS);
+    col = Math.max(0, Math.min(COLS - 1, col));
+    row = Math.max(0, Math.min(ROWS - 1, row));
+    return row * COLS + col;
+  }
+
+  function onCellDown(index, e) {
+    if (S.mode === 'select') {
+      startColumnDrag(index % COLS, e);
+      return;
+    }
+    if (S.dragPaint) {
+      S.painting = true;
+      S.stroke = cloneCells(S.cells);
+      applyPaint(index, S.stroke);
+      S.cells = cloneCells(S.stroke);
+      scheduleDraw();
+    } else {
+      const nm = cloneCells(S.cells);
+      applyPaint(index, nm);
+      S.cells = nm;
+      saveHistory(nm);
+      scheduleDraw();
+    }
+  }
+
+  function onPaintDrag(index) {
+    if (!S.painting || !S.stroke) return;
+    applyPaint(index, S.stroke);
+    S.cells = cloneCells(S.stroke);
+    scheduleDraw();
+  }
+
+  function endStroke() {
+    if (S.painting && S.stroke) {
+      saveHistory(S.stroke);
+      S.stroke = null;
+      S.painting = false;
+    }
+  }
+
+  // =====================================================================
+  // Column drag (Animate mode).
+  // =====================================================================
+  function startColumnDrag(col, e) {
+    if (S.animating) return;
+    if (!S.selectedCols.has(col)) { S.selectedCols = new Set([col]); }
+    const cur = S.colDisp.get(col) || 0;
+    S.dragging = true;
+    S.dragStartY = e.clientY;
+    S.dragStartDisp = cur;
+    S.draggedCol = col;
+    S.preview = cur;
+    scheduleDraw(); renderPanel();
+  }
+  function onColumnMove(e) {
+    if (!S.dragging || S.dragStartY === null) return;
+    const deltaY = S.dragStartY - e.clientY;   // up = positive
+    const shift = Math.round(deltaY / CONFIG.pixelsPerRow);
+    S.preview = Math.max(-ROWS, Math.min(ROWS, S.dragStartDisp + shift));
+    scheduleDraw();
+  }
+  function endColumnDrag() {
+    if (!S.dragging) return;
+    S.selectedCols.forEach((col) => S.colDisp.set(col, S.preview));
+    S.dragging = false;
+    S.dragStartY = null;
+    S.draggedCol = null;
+    scheduleDraw();
+  }
+
+  function bakeDisplacements() {
+    const has = Array.from(S.colDisp.values()).some((d) => d !== 0);
+    if (!has) return;
+    const nm = new Map();
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const p = getCellPigmentsWithShift(row, col);
+        if (p.cyan || p.magenta || p.yellow || p.red || p.blue) nm.set(row * COLS + col, Object.assign({}, p));
+      }
+    }
+    S.cells = nm;
+    S.colDisp = new Map();
+  }
+
+  // =====================================================================
+  // Keyframes / playback.
+  // =====================================================================
+  function addKeyframe() {
+    S.keyframes.push({ id: 'kf-' + Date.now() + '-' + Math.random(), disp: new Map(S.colDisp) });
+    S.selKf = S.keyframes.length - 1;
+    scheduleDraw(); renderPanel();
+  }
+  function updateKeyframe(i) {
+    if (i === null || !S.keyframes[i]) return;
+    S.keyframes[i].disp = new Map(S.colDisp);
+    renderPanel();
+  }
+  function deleteKeyframe(i) {
+    S.keyframes.splice(i, 1);
+    if (S.selKf === i) S.selKf = null;
+    else if (S.selKf !== null && S.selKf > i) S.selKf--;
+    renderPanel();
+  }
+  function jumpToKeyframe(i) {
+    if (i < 0 || i >= S.keyframes.length) return;
+    S.selKf = i;
+    S.colDisp = new Map(S.keyframes[i].disp);
+    S.animating = false;
+    scheduleDraw(); renderPanel();
+  }
+  function playAnimation() {
+    if (S.keyframes.length < 2) return;
+    S.animating = true;
+    S.animStart = Date.now();
+    renderPanel();
+    runAnim();
+  }
+  function pauseAnimation() { S.animating = false; renderPanel(); }
+  function stopAnimation() {
+    S.animating = false;
+    S.progress = 0;
+    if (S.keyframes.length) S.colDisp = new Map(S.keyframes[0].disp);
+    scheduleDraw(); renderPanel();
+  }
+  function clearKeyframes() {
+    S.keyframes = [];
+    S.selKf = null;
+    S.progress = 0;
+    S.animating = false;
+    scheduleDraw(); renderPanel();
+  }
+  function runAnim() {
+    if (!S.animating || S.keyframes.length < 2) return;
+    const total = (S.keyframes.length - 1) * S.kfDur;
+    const elapsed = Date.now() - S.animStart;
+    let p = elapsed / total;
+    if (p >= 1) {
+      if (S.loop) { S.animStart = Date.now(); S.progress = 0; }
+      else { S.progress = 1; S.animating = false; draw(); renderPanel(); return; }
+    } else {
+      S.progress = Math.max(0, Math.min(1, p));
+    }
+    draw();
+    updateAnimInfo();
+    requestAnimationFrame(runAnim);
+  }
+
+  // =====================================================================
+  // Pointer wiring on the grid canvas.
+  // =====================================================================
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const idx = pointerToIndex(e);
+    S.hoverCell = idx;
+    onCellDown(idx, e);
+    if ((S.mode === 'paint' || S.mode === 'erase') && S.dragPaint) {
+      window.addEventListener('pointermove', onWindowPaintMove);
+      window.addEventListener('pointerup', onWindowPaintUp);
+    }
+    if (S.mode === 'select') {
+      window.addEventListener('pointermove', onColumnMove);
+      window.addEventListener('pointerup', onWindowColumnUp);
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const idx = pointerToIndex(e);
+    if (idx !== S.hoverCell) { S.hoverCell = idx; scheduleDraw(); }
+  });
+  canvas.addEventListener('pointerleave', () => { S.hoverCell = null; scheduleDraw(); });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const i = CONFIG.pigments.findIndex((p) => p.type === S.pigment);
+    const n = e.deltaY > 0
+      ? (i + 1) % CONFIG.pigments.length
+      : (i - 1 + CONFIG.pigments.length) % CONFIG.pigments.length;
+    S.pigment = CONFIG.pigments[n].type;
+    scheduleDraw(); renderPanel();
+  }, { passive: false });
+
+  function onWindowPaintMove(e) { onPaintDrag(pointerToIndex(e)); S.hoverCell = pointerToIndex(e); }
+  function onWindowPaintUp() {
+    endStroke();
+    window.removeEventListener('pointermove', onWindowPaintMove);
+    window.removeEventListener('pointerup', onWindowPaintUp);
+  }
+  function onWindowColumnUp() {
+    endColumnDrag();
+    window.removeEventListener('pointermove', onColumnMove);
+    window.removeEventListener('pointerup', onWindowColumnUp);
+    renderPanel();
+  }
+
+  // =====================================================================
+  // Panel — build dynamic bits, wire controls, and reflect state.
+  // =====================================================================
+  const el = (id) => document.getElementById(id);
+
+  // Pigment swatches
+  const swatchWrap = el('swatches');
+  CONFIG.pigments.forEach((p) => {
+    const b = document.createElement('button');
+    b.className = 'swatch';
+    b.style.background = p.display;
+    b.title = p.name;
+    b.dataset.pig = p.type;
+    b.addEventListener('click', () => { S.pigment = p.type; scheduleDraw(); renderPanel(); });
+    swatchWrap.appendChild(b);
+  });
+  // Deposit ticks
+  const ticksWrap = el('depositTicks');
+  for (let i = 0; i < 5; i++) {
+    const d = document.createElement('div');
+    d.className = 'tick';
+    ticksWrap.appendChild(d);
+  }
+
+  // Tool / view buttons
+  document.querySelectorAll('[data-mode]').forEach((b) => {
+    b.addEventListener('click', () => setMode(b.dataset.mode));
+  });
+  document.querySelectorAll('[data-view]').forEach((b) => {
+    b.addEventListener('click', () => { S.view = b.dataset.view; scheduleDraw(); renderPanel(); });
+  });
+
+  function setMode(m) {
+    S.mode = m;
+    if (m === 'paint' || m === 'erase') {
+      bakeDisplacements();
+      S.selectedCols = new Set();
+      S.preview = 0;
+    }
+    S.hoverCell = null;
+    scheduleDraw(); renderPanel();
+  }
+
+  // Sliders
+  el('brushRange').addEventListener('input', (e) => { S.brush = parseFloat(e.target.value); el('brushVal').textContent = S.brush.toFixed(1) + '×'; scheduleDraw(); });
+  el('densityRange').addEventListener('input', (e) => { S.density = parseFloat(e.target.value); el('densityVal').textContent = Math.round(S.density * 100) + '%'; scheduleDraw(); renderPanel(); });
+  el('depositRange').addEventListener('input', (e) => { S.depositIndex = parseInt(e.target.value, 10); scheduleDraw(); renderPanel(); });
+  el('smoothRange').addEventListener('input', (e) => { S.smoothness = parseFloat(e.target.value); el('smoothVal').textContent = S.smoothness.toFixed(1); scheduleDraw(); });
+  el('speedRange').addEventListener('input', (e) => { S.kfDur = parseInt(e.target.value, 10); el('speedVal').textContent = (S.kfDur / 1000).toFixed(1) + 's'; });
+
+  el('dragBtn').addEventListener('click', () => { S.dragPaint = !S.dragPaint; renderPanel(); });
+  el('undoBtn').addEventListener('click', undo);
+  el('redoBtn').addEventListener('click', redo);
+  el('clearBtn').addEventListener('click', () => { const nm = new Map(); S.cells = nm; saveHistory(nm); scheduleDraw(); });
+
+  el('selectAllBtn').addEventListener('click', () => {
+    const all = new Set();
+    for (let i = 0; i < COLS; i++) all.add(i);
+    S.selectedCols = all; scheduleDraw(); renderPanel();
+  });
+  el('deselectBtn').addEventListener('click', () => { S.selectedCols = new Set(); S.preview = 0; scheduleDraw(); renderPanel(); });
+  el('commitBtn').addEventListener('click', () => { bakeDisplacements(); S.selectedCols = new Set(); S.preview = 0; scheduleDraw(); renderPanel(); });
+  el('addKfBtn').addEventListener('click', addKeyframe);
+  el('updateKfBtn').addEventListener('click', () => updateKeyframe(S.selKf));
+  el('playBtn').addEventListener('click', playAnimation);
+  el('pauseBtn').addEventListener('click', pauseAnimation);
+  el('stopBtn').addEventListener('click', stopAnimation);
+  el('loopBtn').addEventListener('click', () => { S.loop = !S.loop; renderPanel(); });
+  el('clearKfBtn').addEventListener('click', clearKeyframes);
+
+  // Tools tab open/close
+  const tools = el('tools');
+  const tab = el('toolsTab');
+  function toggleTools() {
+    const open = tools.classList.toggle('open');
+    tab.textContent = (open ? '▼' : '▲') + ' Tools';
+    tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  tab.addEventListener('click', toggleTools);
+  tab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTools(); } });
+
+  function updateAnimInfo() {
+    el('animInfo').textContent = S.animating
+      ? Math.round(S.progress * 100) + '%'
+      : (S.keyframes.length + ' kf');
+  }
+
+  // Reflect all state into the panel (active classes, contextual rows, values).
+  function renderPanel() {
+    document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === S.mode));
+    document.querySelectorAll('[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === S.view));
+
+    el('rowBrush').classList.toggle('hidden', !(S.mode === 'paint' || S.mode === 'erase'));
+    el('rowPaint').classList.toggle('hidden', S.mode !== 'paint');
+    el('rowSmooth').classList.toggle('hidden', S.view !== 'smooth');
+    el('rowAnim').classList.toggle('hidden', S.mode !== 'select');
+    el('rowTimeline').classList.toggle('hidden', !(S.mode === 'select' && S.keyframes.length > 0));
+
+    el('dragBtn').textContent = 'Drag · ' + (S.dragPaint ? 'On' : 'Off');
+    el('dragBtn').classList.toggle('active', S.dragPaint);
+    el('loopBtn').textContent = 'Loop · ' + (S.loop ? 'On' : 'Off');
+    el('loopBtn').classList.toggle('active', S.loop);
+
+    el('undoBtn').disabled = S.hIndex <= 0;
+    el('redoBtn').disabled = S.hIndex >= S.history.length - 1;
+    el('playBtn').disabled = S.keyframes.length < 2;
+    el('playBtn').classList.toggle('active', S.animating);
+    el('pauseBtn').disabled = !S.animating;
+    el('updateKfBtn').disabled = S.selKf === null;
+
+    // Swatches
+    document.querySelectorAll('.swatch').forEach((b) => b.classList.toggle('active', b.dataset.pig === S.pigment));
+
+    // Sliders (value labels + positions)
+    el('brushRange').value = S.brush; el('brushVal').textContent = S.brush.toFixed(1) + '×';
+    el('densityRange').value = S.density; el('densityVal').textContent = Math.round(S.density * 100) + '%';
+    el('depositRange').value = S.depositIndex;
+    el('smoothRange').value = S.smoothness; el('smoothVal').textContent = S.smoothness.toFixed(1);
+    el('speedRange').value = S.kfDur; el('speedVal').textContent = (S.kfDur / 1000).toFixed(1) + 's';
+
+    // Deposit ticks + preview swatch
+    document.querySelectorAll('#depositTicks .tick').forEach((t, i) => t.classList.toggle('on', i === S.depositIndex));
+    const dp = EMPTY();
+    dp[S.pigment] = Math.min(1, CONFIG.depositScale[S.depositIndex] * S.density);
+    const prgb = pigmentsToRgb(dp, S.density);
+    el('depositPreview').style.background = 'rgb(' + prgb[0] + ',' + prgb[1] + ',' + prgb[2] + ')';
+
+    updateAnimInfo();
+    renderTimeline();
+  }
+
+  function renderTimeline() {
+    const tl = el('timeline');
+    tl.innerHTML = '';
+    S.keyframes.forEach((kf, i) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'kf';
+      const num = document.createElement('button');
+      num.className = 'kf-num' + (S.selKf === i ? ' active' : '');
+      num.textContent = (i + 1);
+      num.addEventListener('click', () => jumpToKeyframe(i));
+      const del = document.createElement('button');
+      del.className = 'kf-del';
+      del.textContent = '×';
+      del.title = 'Eliminar keyframe';
+      del.addEventListener('click', () => deleteKeyframe(i));
+      wrap.appendChild(num);
+      wrap.appendChild(del);
+      tl.appendChild(wrap);
+      if (i < S.keyframes.length - 1) {
+        const link = document.createElement('div');
+        link.className = 'kf-link';
+        tl.appendChild(link);
+      }
+    });
+  }
+
+  // =====================================================================
+  // Keyboard — undo / redo (mirrors the source component).
+  // =====================================================================
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    else if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+             ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')) { e.preventDefault(); redo(); }
+  });
+
+  // =====================================================================
+  // Theme toggle — same contract as the homepage: '.dark' on <html> +
+  // 'beLight.theme' in localStorage. Concrete colours on the canvas, so a
+  // flip repaints.
+  // =====================================================================
+  const themeToggle = el('themeToggle');
+  const themeToggleText = el('themeToggleText');
+  function syncTheme() { themeToggleText.textContent = isDark() ? '● OSC' : '○ LUZ'; }
+  function flipTheme() {
+    root.classList.toggle('dark');
+    try {
+      localStorage.setItem('beLight.theme', isDark() ? 'dark' : 'light');
+    } catch (e) { /* storage unavailable — theme still flips for this view */ }
+    syncTheme(); scheduleDraw();
+  }
+  themeToggle.addEventListener('click', flipTheme);
+  themeToggle.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipTheme(); } });
+  window.addEventListener('storage', (e) => {
+    if (e.key !== 'beLight.theme') return;
+    root.classList.toggle('dark', e.newValue === 'dark');
+    syncTheme(); scheduleDraw();
+  });
+
+  // =====================================================================
+  // Back to index — hash change on the parent document, never a reload.
+  // =====================================================================
+  el('backIndex').addEventListener('click', goHome);
+  el('backIndex').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); } });
+  function goHome() {
+    try {
+      if (window.parent && window.parent !== window) { window.parent.location.hash = '#home'; return; }
+    } catch (err) { /* cross-origin parent — fall through */ }
+    window.location.href = 'index.html#home';
+  }
+
+  // =====================================================================
+  // Boot.
+  // =====================================================================
+  window.addEventListener('resize', layout);
+  computeGeometry();
+  syncTheme();
+  layout();
+  renderPanel();
+})();
+</script>
+
+</body>
+</html>

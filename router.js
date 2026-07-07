@@ -11,7 +11,7 @@
   const chapterMap = {
     '01': 'cap-01-focus.html',
     '02': 'cap-02-path.html',
-    '03': 'cap-03-adaptability.html',
+    '03': 'cap-03.html',
     '04': 'cap-04-coherence.html',
     '05': 'cap-05.html',
     '06': 'cap-06.html',
