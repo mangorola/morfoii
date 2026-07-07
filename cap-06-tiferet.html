@@ -114,21 +114,36 @@
     transition: background 0.45s ease;
   }
 
-  #video, #overlay {
+  #video {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    z-index: 1;
   }
-  #video { z-index: 1; }
+
+  /* Overlay = frosted glass: the CONTAINER's backdrop-filter blurs the
+     video sitting behind it (never itself); the capture image inside only
+     tints the blurred result via mix-blend-mode. Background must stay
+     transparent or the backdrop-filter has nothing to see through. */
   #overlay {
+    position: absolute;
+    inset: 0;
     z-index: 2;
     display: none;
-    mix-blend-mode: multiply;
-    opacity: 0.5;
-    filter: blur(0px);
+    background: rgba(0, 0, 0, 0);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
     pointer-events: none;
+  }
+  #overlayImg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    mix-blend-mode: lighten;
+    opacity: 0.5;
   }
 
   /* === Tools panel — slides up from the frame's bottom line ============== */
@@ -301,7 +316,9 @@
 <div id="artboard">
   <div id="stage">
     <video id="video" autoplay loop muted playsinline></video>
-    <img id="overlay" alt="">
+    <div id="overlay">
+      <img id="overlayImg" alt="">
+    </div>
 
     <div id="panel">
       <div id="emptyMsg" style="display:none;">Creá capturas en el Capítulo 01 para usarlas de filtro acá.</div>
@@ -335,10 +352,10 @@
   // =====================================================================
   const CONFIG = {
     videoSrc: 'tiferet.mp4',
-    blendMode: 'multiply',
+    blendMode: 'lighten',
     defaultOpacity: 0.5,
-    defaultBlur: 0,
-    maxBlur: 20,
+    defaultBlur: 20,
+    maxBlur: 40,
     storageKey: 'beLight.captures',
     maxThumbs: 7,
     panelHeight: 200,
@@ -375,6 +392,7 @@
   // Overlay — reads captures from localStorage (written by Chapter 01).
   // =====================================================================
   const overlay = document.getElementById('overlay');
+  const overlayImg = document.getElementById('overlayImg');
   const panel = document.getElementById('panel');
   const emptyMsg = document.getElementById('emptyMsg');
   const panelRows = document.getElementById('panelRows');
@@ -383,9 +401,10 @@
   const blurInput = document.getElementById('blur');
   const clearBtn = document.getElementById('clearBtn');
 
-  overlay.style.mixBlendMode = CONFIG.blendMode;
-  overlay.style.opacity = String(CONFIG.defaultOpacity);
-  overlay.style.filter = 'blur(' + CONFIG.defaultBlur + 'px)';
+  overlayImg.style.mixBlendMode = CONFIG.blendMode;
+  overlayImg.style.opacity = String(CONFIG.defaultOpacity);
+  overlay.style.backdropFilter = 'blur(' + CONFIG.defaultBlur + 'px)';
+  overlay.style.webkitBackdropFilter = 'blur(' + CONFIG.defaultBlur + 'px)';
   opacityInput.value = CONFIG.defaultOpacity;
   blurInput.value = CONFIG.defaultBlur;
   blurInput.max = CONFIG.maxBlur;
@@ -403,7 +422,7 @@
   let activeThumb = null;
 
   function selectCapture(image, thumbEl) {
-    overlay.src = image;
+    overlayImg.src = image;
     overlay.style.display = 'block';
     if (activeThumb) activeThumb.classList.remove('active');
     activeThumb = thumbEl || null;
@@ -412,7 +431,7 @@
 
   function clearOverlay() {
     overlay.style.display = 'none';
-    overlay.removeAttribute('src');
+    overlayImg.removeAttribute('src');
     if (activeThumb) activeThumb.classList.remove('active');
     activeThumb = null;
   }
@@ -445,10 +464,12 @@
   }
 
   opacityInput.addEventListener('input', function () {
-    overlay.style.opacity = opacityInput.value;
+    overlayImg.style.opacity = opacityInput.value;
   });
   blurInput.addEventListener('input', function () {
-    overlay.style.filter = 'blur(' + blurInput.value + 'px)';
+    const b = 'blur(' + blurInput.value + 'px)';
+    overlay.style.backdropFilter = b;
+    overlay.style.webkitBackdropFilter = b;
   });
   clearBtn.addEventListener('click', clearOverlay);
 
