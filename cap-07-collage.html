@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07</title>
+
+<!-- Theme before first paint: same key + class contract as index.html. -->
+<script>
+  try {
+    if (localStorage.getItem('beLight.theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
+
+  /* Theme tokens — same names/values as index.html so both documents flip
+     together. --hover-scale / --hover-tr are injected from CONFIG at boot;
+     the values here are matching fallbacks. */
+  :root {
+    --bg: #FFFFFF;
+    --fg: #1a1a1a;
+    --fg-dim: rgba(26, 26, 26, 0.45);
+    --fg-faint: rgba(26, 26, 26, 0.22);
+    --line: #5E5E5E;
+    --line-w: 0.9px;
+    --hover-scale: 1.06;
+    --hover-tr: 320ms;
+  }
+  :root.dark {
+    --bg: #000000;
+    --fg: #ffffff;
+    --fg-dim: rgba(245, 245, 240, 0.5);
+    --fg-faint: rgba(245, 245, 240, 0.25);
+    --line: #2E2E2E;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100vh;   /* fallback for older browsers */
+    height: 100dvh;  /* modern: excludes mobile browser chrome */
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Space Grotesk', sans-serif;
+    transition: background 0.45s ease, color 0.45s ease;
+  }
+
+  /* === SVG board — frame lines + margin type ============================= */
+  /* Same coordinate contract as index.html: viewBox 0 0 1920 1080 with
+     "meet" scaling. Only the 4 frame lines here (no circles, no guides,
+     no nodes). The board sits ON TOP of the collage so the hairlines stay
+     crisp over the photos; pointer events pass through except on .ctrl. */
+  #board {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: block;
+    overflow: visible;   /* frame lines overshoot the artboard to the viewport edges */
+    z-index: 10;
+    pointer-events: none;
+  }
+  #board .frame {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: var(--line-w);
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.45s ease;
+  }
+  #board text {
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .label-num  { fill: var(--fg-dim); transition: fill 0.45s ease; }
+  .ctrl {
+    cursor: pointer;
+    pointer-events: all;
+    fill: var(--fg-dim);
+    transition: fill 0.3s ease;
+  }
+  .ctrl:hover, .ctrl:focus-visible { fill: var(--fg); }
+  .ctrl:focus { outline: none; }
+  .ctrl .hit { fill: transparent; stroke: none; }
+
+  /* === Artboard — HTML twin of the SVG coordinate system ================= */
+  /* A fixed 1920×1080 div, centred and scaled by JS with the same
+     min(vw/1920, vh/1080) math as the SVG's "xMidYMid meet". Everything
+     inside uses raw artboard pixels, so the collage can never drift from
+     the frame drawn in the SVG. */
+  #artboard {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 1920px;
+    height: 1080px;
+    transform: translate(-50%, -50%) scale(1);
+    z-index: 1;
+  }
+
+  /* Inner stage: the frame rectangle. overflow:hidden crops any photo that
+     overshoots exactly at the frame line — same clip every other chapter uses. */
+  #stage {
+    position: absolute;
+    left: 80px;
+    top: 80px;
+    width: 1760px;
+    height: 920px;
+    overflow: hidden;
+    background: var(--bg);
+    transition: background 0.45s ease;
+  }
+
+  /* === Collage photos ==================================================== */
+  /* One <img> per slot, absolutely positioned in raw stage pixels. The tilt
+     is baked into the base transform via --rot so :hover only adds the scale
+     (the rotation never resets). z-index defaults to the placement order;
+     JS bumps the hovered photo above all the rest. */
+  .collage-photo {
+    position: absolute;
+    object-fit: cover;
+    display: block;
+    background: var(--bg);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    transform: rotate(var(--rot, 0deg));
+    transform-origin: center center;
+    transition: transform var(--hover-tr, 320ms) cubic-bezier(0.22, 1, 0.36, 1);
+    cursor: default;
+    user-select: none;
+    -webkit-user-drag: none;
+    will-change: transform;
+  }
+  .collage-photo:hover {
+    transform: rotate(var(--rot, 0deg)) scale(var(--hover-scale, 1.06));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .collage-photo { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Frame + margin type: homepage coordinate system, frame lines only. -->
+<svg id="board" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
+  <!-- 4 "infinite" frame lines, overshooting the artboard on every side -->
+  <line class="frame" x1="-1000" y1="80"    x2="3000" y2="80"/>
+  <line class="frame" x1="-1000" y1="1000"  x2="3000" y2="1000"/>
+  <line class="frame" x1="80"    y1="-1000" x2="80"   y2="2080"/>
+  <line class="frame" x1="1840"  y1="-1000" x2="1840" y2="2080"/>
+
+  <!-- Chapter label, top-left margin. This chapter carries NO sefirah name —
+       only the number is shown (no adjacent .label-name text element). -->
+  <text class="label-num" x="120" y="45" font-size="11">07</text>
+
+  <!-- Theme toggle, top-right margin (left of the back control). Same
+       typographic treatment + localStorage contract as the homepage. -->
+  <g class="ctrl" id="themeToggle" role="button" tabindex="0" aria-label="Cambiar tema">
+    <rect class="hit" x="1586" y="30" width="76" height="24"/>
+    <text id="themeToggleText" x="1655" y="46" font-size="11" text-anchor="end">○ LUZ</text>
+  </g>
+
+  <!-- Back to index, top-right margin -->
+  <g class="ctrl" id="backIndex" role="link" tabindex="0" aria-label="Volver al índice">
+    <rect class="hit" x="1670" y="30" width="140" height="24"/>
+    <text x="1800" y="46" font-size="11" text-anchor="end">← Índice</text>
+  </g>
+</svg>
+
+<!-- Scaled HTML artboard: the collage lives inside the frame rectangle. -->
+<div id="artboard">
+  <div id="stage"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // CONFIG — all tunables. Coordinates are raw pixels on the 1920×1080
+  // artboard (same system as index.html); the viewBox / JS scale do all
+  // the responsive work.
+  // NOTE: the 10 source files on disk are .jpg (nuevo1.jpg … nuevo10.jpg),
+  // so the paths below use .jpg — anything else would 404 and leave the
+  // collage blank.
+  // =====================================================================
+  const CONFIG = {
+    artboard: { w: 1920, h: 1080 },
+    stage: { x: 80, y: 80, w: 1760, h: 920 },
+    images: [
+      'nuevo1.jpg', 'nuevo2.jpg', 'nuevo3.jpg', 'nuevo4.jpg',
+      'nuevo5.jpg', 'nuevo6.jpg', 'nuevo7.jpg', 'nuevo8.jpg',
+      'nuevo9.jpg', 'nuevo10.jpg',
+    ],
+    seed: 90210,                  // deterministic layout — change this
+                                  // single number to reshuffle the
+                                  // whole collage if the default
+                                  // arrangement looks bad
+    clusterRadius: 420,           // how far slot centers scatter from
+                                  // the stage centre (artboard px)
+    minSize: 220, maxSize: 400,   // slot width/height range
+    aspectRange: [0.65, 1.5],     // width/height ratio range (mix of
+                                  // portrait and landscape crops)
+    maxRotationDeg: 0,            // slight tilt per photo, ±this value (0 = straight)
+    hoverScale: 1.06,
+    hoverTransitionMs: 320,
+    sampleSize: 24,               // px — offscreen canvas size used to
+                                  // sample each image's average color
+  };
+
+  // Push hover tunables into CSS custom properties (theme tokens stay in CSS).
+  const root = document.documentElement;
+  root.style.setProperty('--hover-scale', CONFIG.hoverScale);
+  root.style.setProperty('--hover-tr', CONFIG.hoverTransitionMs + 'ms');
+
+  // =====================================================================
+  // Artboard scale — mirrors the SVG's preserveAspectRatio="xMidYMid meet"
+  // so the HTML collage and the SVG frame share one coordinate system.
+  // =====================================================================
+  const artboard = document.getElementById('artboard');
+  function fit() {
+    const s = Math.min(
+      window.innerWidth / CONFIG.artboard.w,
+      window.innerHeight / CONFIG.artboard.h
+    );
+    if (s <= 0) return;   // viewport not laid out yet — wait for a real size
+    artboard.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  // The iframe can be attached before it has a size (no resize event fires
+  // for the zero→sized transition) — observe the root element as well.
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(fit).observe(document.documentElement);
+  }
+  fit();
+
+  // =====================================================================
+  // Seeded PRNG — same hash-based, reload-stable approach the rest of the
+  // codebase uses (HOD's value-noise seeds, PATH's history) instead of
+  // Math.random, so the same seed always produces the same layout.
+  // =====================================================================
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // =====================================================================
+  // 1) Generate 10 slots (position / size / rotation) with the seeded RNG.
+  //    Centers scatter around the stage middle in polar coords, biased to
+  //    the centre (sqrt of a uniform random → even areal density), so the
+  //    cluster reads as centered, not a uniform ring loaded on its edge.
+  // =====================================================================
+  const rng = mulberry32(CONFIG.seed);
+  const cx0 = CONFIG.stage.w / 2, cy0 = CONFIG.stage.h / 2;
+  const slots = [];
+  for (let i = 0; i < 10; i++) {
+    const angle = rng() * Math.PI * 2;
+    const radius = Math.sqrt(rng()) * CONFIG.clusterRadius;
+    const w = CONFIG.minSize + rng() * (CONFIG.maxSize - CONFIG.minSize);
+    const aspect = CONFIG.aspectRange[0] + rng() * (CONFIG.aspectRange[1] - CONFIG.aspectRange[0]);
+    const h = w / aspect;
+    const cx = cx0 + Math.cos(angle) * radius;
+    const cy = cy0 + Math.sin(angle) * radius;
+    const rot = (rng() * 2 - 1) * CONFIG.maxRotationDeg;
+    slots.push({ x: cx - w / 2, y: cy - h / 2, w, h, rot, cx, cy });
+  }
+
+  // =====================================================================
+  // Nearest-neighbour chain — greedily walk from one item to its closest
+  // remaining neighbour, so consecutive chain entries are "adjacent" under
+  // distFn. Used twice: once over slot positions (spatial), once over image
+  // colours (RGB). Zipping the two chains puts colour-adjacent photos into
+  // space-adjacent slots → a smooth gradient across the cluster.
+  // =====================================================================
+  function nnChain(items, distFn) {
+    const remaining = items.slice();
+    const chain = [remaining.shift()];
+    while (remaining.length) {
+      const last = chain[chain.length - 1];
+      let bestI = 0, bestD = Infinity;
+      remaining.forEach((it, i) => {
+        const d = distFn(last, it);
+        if (d < bestD) { bestD = d; bestI = i; }
+      });
+      chain.push(remaining.splice(bestI, 1)[0]);
+    }
+    return chain;
+  }
+
+  // 2/3) Order the slots into a spatial nearest-neighbour chain.
+  const slotChain = nnChain(slots, (a, b) => Math.hypot(a.cx - b.cx, a.cy - b.cy));
+
+  // =====================================================================
+  // 4) Sample each image's average colour on a tiny offscreen canvas.
+  //    The nuevo images are same-origin, so getImageData is not tainted;
+  //    if it ever fails we fall back to mid-grey so one bad file can't
+  //    break the colour ordering.
+  // =====================================================================
+  function averageColor(img) {
+    const s = CONFIG.sampleSize;
+    const cv = document.createElement('canvas');
+    cv.width = s; cv.height = s;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, s, s);
+    let data;
+    try { data = ctx.getImageData(0, 0, s, s).data; }
+    catch (e) { return [128, 128, 128]; }   // tainted canvas — neutral grey
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
+    }
+    return [r / n, g / n, b / n];
+  }
+
+  // Load one image; resolve on both load and error so a missing file can't
+  // stall Promise.all — a broken image just carries a neutral colour.
+  function loadImage(src) {
+    return new Promise(function (resolve) {
+      const img = new Image();
+      img.onload = function () { resolve({ src: src, img: img, ok: true }); };
+      img.onerror = function () { resolve({ src: src, img: null, ok: false }); };
+      img.src = src;
+    });
+  }
+
+  // Load every image first, then build { src, color } records.
+  Promise.all(CONFIG.images.map(loadImage)).then(function (loaded) {
+    const imageData = loaded.map(function (rec) {
+      return {
+        src: rec.src,
+        color: rec.ok ? averageColor(rec.img) : [128, 128, 128],
+      };
+    });
+
+    // 5) Order the images into a colour nearest-neighbour chain (Euclidean
+    //    RGB distance).
+    const colorChain = nnChain(imageData, (a, b) => Math.hypot(
+      a.color[0] - b.color[0],
+      a.color[1] - b.color[1],
+      a.color[2] - b.color[2]
+    ));
+
+    // 6/7) Zip the chains — slot i gets colour-chain photo i — and render one
+    //      absolutely-positioned <img> per slot. z-index = placement order so
+    //      later photos rest slightly on top of earlier ones by default.
+    const stage = document.getElementById('stage');
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < slotChain.length; i++) {
+      const slot = slotChain[i];
+      const data = colorChain[i];
+      const el = document.createElement('img');
+      el.className = 'collage-photo';
+      el.src = data.src;
+      el.alt = '';
+      el.draggable = false;
+      el.style.left = slot.x + 'px';
+      el.style.top = slot.y + 'px';
+      el.style.width = slot.w + 'px';
+      el.style.height = slot.h + 'px';
+      el.style.setProperty('--rot', slot.rot.toFixed(3) + 'deg');
+      const baseZ = i + 1;
+      el.style.zIndex = String(baseZ);
+
+      // 8) Hover: CSS scales + un-rotates nothing (rotation stays baked in),
+      //    JS raises the photo above every sibling, then restores its layer.
+      el.addEventListener('pointerenter', function () { el.style.zIndex = '100'; });
+      el.addEventListener('pointerleave', function () { el.style.zIndex = String(baseZ); });
+
+      frag.appendChild(el);
+    }
+    stage.appendChild(frag);
+  });
+
+  // =====================================================================
+  // Back to index — hash change on the parent document, never a reload.
+  // =====================================================================
+  const backIndex = document.getElementById('backIndex');
+  function goHome() {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.location.hash = '#home';
+        return;
+      }
+    } catch (err) { /* cross-origin parent — fall through */ }
+    window.location.href = 'index.html#home';
+  }
+  backIndex.addEventListener('click', goHome);
+  backIndex.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+  });
+
+  // =====================================================================
+  // Theme toggle — discreet typographic control in the top margin. Shares
+  // index.html's contract: '.dark' class on <html> + 'beLight.theme' in
+  // localStorage, so the preference carries across the whole site. The
+  // label mirrors the homepage ('○ LUZ' / '● OSC').
+  // =====================================================================
+  const themeToggle = document.getElementById('themeToggle');
+  const themeToggleText = document.getElementById('themeToggleText');
+  function syncTheme() {
+    themeToggleText.textContent = root.classList.contains('dark') ? '● OSC' : '○ LUZ';
+  }
+  function flipTheme() {
+    root.classList.toggle('dark');
+    try {
+      localStorage.setItem('beLight.theme',
+        root.classList.contains('dark') ? 'dark' : 'light');
+    } catch (e) { /* storage unavailable — theme still flips for this view */ }
+    syncTheme();
+  }
+  themeToggle.addEventListener('click', flipTheme);
+  themeToggle.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipTheme(); }
+  });
+  syncTheme();
+
+  // Theme can change in another tab / the homepage — mirror it live.
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'beLight.theme') {
+      root.classList.toggle('dark', e.newValue === 'dark');
+      syncTheme();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

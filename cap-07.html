@@ -1,0 +1,32 @@
+<!-- Chapter 07 — (no sefirah name: the frame shows only "07") -->
+<!-- Wrapper loaded into index.html via hash routing (#capitulo-07). -->
+<!-- No <script>: safe for innerHTML injection. The experience lives in
+     cap-07-collage.html — an iframe document, so its own JS (seeded layout,
+     colour-sorted placement, hover-to-front) runs normally. scrolling="no":
+     the collage is a fixed 1920×1080 artboard. -->
+
+<style>
+  #cap-07-collage-wrap {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+  #cap-07-collage-wrap iframe {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: block;
+  }
+</style>
+
+<section id="cap-07-collage-wrap">
+  <iframe
+    src="cap-07-collage.html"
+    title="07"
+    scrolling="no"
+  ></iframe>
+</section>
