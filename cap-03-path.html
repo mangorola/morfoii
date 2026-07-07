@@ -132,14 +132,14 @@
   .ctrl:focus { outline: none; }
   .ctrl .hit { fill: transparent; stroke: none; }
 
-  /* === Tools panel — bottom margin, slides up ============================ */
-  /* Lives inside the scaled artboard so it aligns with the frame and flips
-     with the theme. Bottom-anchored: opening grows the body UPWARD. */
+  /* === Tools panel — anchored to the stage floor, slides up ============= */
+  /* Lives inside #stage so it aligns with the frame and flips with the
+     theme. Bottom-anchored: opening grows the body UPWARD. */
   #tools {
     position: absolute;
-    left: 80px;
-    right: 80px;
-    bottom: 22px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 5;
     display: flex;
     flex-direction: column;
@@ -326,10 +326,9 @@
 <div id="artboard">
   <div id="stage">
     <canvas id="grid"></canvas>
-  </div>
 
-  <!-- Tools panel: collapsed = tab only; opens upward over the lower stage -->
-  <div id="tools">
+    <!-- Tools panel: collapsed = tab only; opens upward over the lower stage -->
+    <div id="tools">
     <div id="toolsBody">
       <div id="toolsInner">
 
@@ -439,6 +438,7 @@
       </div>
     </div>
     <div id="toolsTab" role="button" tabindex="0" aria-expanded="false">▲ Tools</div>
+    </div>
   </div>
 </div>
 
@@ -478,20 +478,21 @@
   // pigment mixing: white light filtered through coloured acrylic sheets).
   // =====================================================================
   const CONFIG = {
-    gridRows: 12,
-    gridCols: 20,
+    gridRows: 23,
+    gridCols: 44,
     stageW: 1760,               // inner stage — must match the frame
     stageH: 920,
-    gridPad: 48,                // air between the grid and the frame
+    gridPad: 0,                 // 44×23 of 40px cells tile 1760×920 exactly
 
-    // Pigments: subtractive primaries + red/blue acrylics. displayColor is
-    // the swatch shown in the palette (the pure pigment, not the filtered mix).
+    // Pigments: each acts as a transmittance filter on white light — its rgb
+    // is how much of each channel it lets through. display is the swatch shown
+    // in the palette; type keys the per-cell pigment amounts (unchanged).
     pigments: [
-      { name: 'Cyan',    type: 'cyan',    display: 'rgb(0,255,255)' },
-      { name: 'Magenta', type: 'magenta', display: 'rgb(255,0,255)' },
-      { name: 'Yellow',  type: 'yellow',  display: 'rgb(255,255,0)' },
-      { name: 'Red',     type: 'red',     display: 'rgb(255,0,0)' },
-      { name: 'Blue',    type: 'blue',    display: 'rgb(0,0,255)' },
+      { name: 'Steel',   type: 'cyan',    display: '#8EABBF', rgb: [142, 171, 191] },
+      { name: 'Sage',    type: 'magenta', display: '#C8D4D3', rgb: [200, 212, 211] },
+      { name: 'Crimson', type: 'yellow',  display: '#B7364C', rgb: [183, 54, 76] },
+      { name: 'Pink',    type: 'red',     display: '#F85794', rgb: [248, 87, 148] },
+      { name: 'Orange',  type: 'blue',    display: '#F89626', rgb: [248, 150, 38] },
     ],
     // Deposit strength scale (Soft → Saturated) — how much pigment a stroke lays.
     depositScale: [0.15, 0.25, 0.4, 0.6, 0.9],
@@ -561,18 +562,25 @@
   const isDark = () => root.classList.contains('dark');
 
   // =====================================================================
-  // Colour model — subtractive mixing (white light through acrylics).
-  // Returns [r,g,b] ints 0..255. Identical maths to the source component.
+  // Colour model — white light filtered through pigment transmittance.
+  // Each pigment's rgb (0..1 per channel) is how much light it passes; a
+  // cell's amount + density set how strongly that filter applies.
+  // Returns [r,g,b] ints 0..255.
   // =====================================================================
+  const PIGMENT_TX = CONFIG.pigments.map((p) => ({
+    type: p.type,
+    tx: [p.rgb[0] / 255, p.rgb[1] / 255, p.rgb[2] / 255],
+  }));
+
   function pigmentsToRgb(p, density) {
-    let r = 1, g = 1, b = 1;
-    r *= (1 - Math.min(p.cyan, 1) * density);        // cyan absorbs red
-    g *= (1 - Math.min(p.magenta, 1) * density);     // magenta absorbs green
-    b *= (1 - Math.min(p.yellow, 1) * density);      // yellow absorbs blue
-    const rd = Math.min(p.red, 1) * density;         // red absorbs green+blue
-    g *= (1 - rd * 0.8); b *= (1 - rd * 0.8);
-    const bl = Math.min(p.blue, 1) * density;        // blue absorbs red+green
-    r *= (1 - bl * 0.8); g *= (1 - bl * 0.8);
+    let r = 1, g = 1, b = 1;   // white light
+    for (let i = 0; i < PIGMENT_TX.length; i++) {
+      const pig = PIGMENT_TX[i];
+      const amt = Math.min(p[pig.type], 1) * density;
+      r *= 1 - amt * (1 - pig.tx[0]);
+      g *= 1 - amt * (1 - pig.tx[1]);
+      b *= 1 - amt * (1 - pig.tx[2]);
+    }
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
   }
 
