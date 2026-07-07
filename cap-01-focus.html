@@ -18,14 +18,12 @@
     /* Gallery palette — the ONE part of this chapter that follows the global
        theme (the frame/sim stay dark). Light defaults; dark override below. */
     --g-panel: rgba(0, 0, 0, 0.92);
-    --g-fg:    #1a1a1a;
     --g-dim:   rgba(26, 26, 26, 0.55);
     --g-line:  rgba(26, 26, 26, 0.22);
     --g-slot:  rgba(0, 0, 0, 0.04);
   }
   :root.dark #cap-01-focus {
     --g-panel: rgba(12, 12, 12, 0.92);
-    --g-fg:    #1a1a1a;
     --g-dim:   rgb(245, 245, 240);
     --g-line:  rgba(245, 245, 240, 0.20);
     --g-slot:  rgba(255, 255, 255, 0.04);
@@ -96,22 +94,22 @@
   #cap-01-focus .ctrl:focus { outline: none; }
   #cap-01-focus .ctrl .hit { fill: transparent; stroke: none; }
 
-  /* --- Capture hint: top margin, same type as the "01 FOCUS" label -------- */
+  /* --- Capture hint: top margin, same type as the "01 FOCUS" label --------
+     Always on — never dismissed, never fades. Fixed position recalculated
+     by layout() on resize so it stays pinned to the top margin. */
   #cap-01-focus .cap-hint {
     position: fixed;
     z-index: 15;
     font-family: 'Space Mono', monospace;
     font-weight: 400;
-    font-size: 11px;
+    font-size: 9pt;
     letter-spacing: 0.34em;
     text-transform: uppercase;
     color: var(--f-fg);        /* over the always-dark top margin */
     opacity: 0.3;
     white-space: nowrap;
     pointer-events: none;
-    transition: opacity 0.7s ease;
   }
-  #cap-01-focus .cap-hint.gone { opacity: 0; }
 
   /* --- Gallery: bottom-anchored; toggle rides on top of the sliding panel -- */
   #cap-01-focus .gallery {
@@ -133,7 +131,7 @@
     font-size: 9px;
     letter-spacing: 0.34em;
     text-transform: uppercase;
-    color: var(--g-fg);
+    color: #ffffff;
     background: var(--g-panel);
     border: 1px solid var(--g-line);
     border-radius: 0px;
@@ -332,7 +330,6 @@
 
   // Session gallery: index 0 = oldest, last = newest. Array of {image, timestamp}.
   let sessionCaptures = [];
-  let hintDismissed = false;
 
   // Sample images — decorative defaults for chapter 01 only. Never written
   // to localStorage, never read by chapter 06.
@@ -403,7 +400,6 @@
       savePersisted(persisted);
 
       renderGallery();
-      dismissHint();
     });
   }
 
@@ -445,20 +441,12 @@
   function toggleGallery() {
     const open = galleryEl.classList.toggle('open');
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    toggle.innerHTML = (open ? '▼' : '▲') + ' Gallery';
+    toggle.innerHTML = (open ? '▼' : '▲') + ' Galería';
   }
   toggle.addEventListener('click', toggleGallery);
 
-  // ---- Hint: fade out for good once the first capture lands ----------------
-  function dismissHint() {
-    if (hintDismissed) return;
-    hintDismissed = true;
-    hint.classList.add('gone');
-  }
-
   // ---- Prime from localStorage so returning users see their past captures --
   sessionCaptures = loadPersisted().slice(-CONFIG.maxSessionCaptures);
-  if (sessionCaptures.length > 0) dismissHint();   // they've captured before
   renderGallery();
 
   // ---- Receive captures from the iframe (guard against stale/foreign msgs) --
