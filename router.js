@@ -10,7 +10,7 @@
 (function () {
   const chapterMap = {
     '01': 'cap-01-focus.html',
-    '02': 'cap-02-path.html',
+    '02': 'cap-08.html',
     '03': 'cap-03.html',
     '04': 'cap-04-coherence.html',
     '05': 'cap-05.html',
