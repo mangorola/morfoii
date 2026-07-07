@@ -352,9 +352,10 @@
   // =====================================================================
   const CONFIG = {
     videoSrc: 'tiferet.mp4',
+    defaultImage: 'paracapitulo06.png',
     blendMode: 'lighten',
-    defaultOpacity: 0.5,
-    defaultBlur: 20,
+    defaultOpacity: 0.85,
+    defaultBlur: 36,
     maxBlur: 40,
     storageKey: 'beLight.captures',
     maxThumbs: 7,
@@ -409,6 +410,11 @@
   blurInput.value = CONFIG.defaultBlur;
   blurInput.max = CONFIG.maxBlur;
 
+  // Default layer: paracapitulo06.png, shown until the visitor picks one of
+  // their own Chapter 01 captures (or clears it).
+  overlayImg.src = CONFIG.defaultImage;
+  overlay.style.display = 'block';
+
   function readCaptures() {
     try {
       const raw = localStorage.getItem(CONFIG.storageKey);
@@ -430,8 +436,8 @@
   }
 
   function clearOverlay() {
-    overlay.style.display = 'none';
-    overlayImg.removeAttribute('src');
+    overlayImg.src = CONFIG.defaultImage;
+    overlay.style.display = 'block';
     if (activeThumb) activeThumb.classList.remove('active');
     activeThumb = null;
   }
@@ -447,7 +453,7 @@
       (hasCaptures ? CONFIG.panelHeight : CONFIG.panelHeightEmpty) + 'px');
 
     thumbsEl.innerHTML = '';
-    if (!hasCaptures) { clearOverlay(); return; }
+    if (!hasCaptures) { return; }
 
     captures.forEach(function (cap) {
       const btn = document.createElement('button');

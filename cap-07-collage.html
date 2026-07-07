@@ -129,7 +129,6 @@
     object-fit: cover;
     display: block;
     background: var(--bg);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     transform: rotate(var(--rot, 0deg));
     transform-origin: center center;
     transition: transform var(--hover-tr, 320ms) cubic-bezier(0.22, 1, 0.36, 1);
@@ -189,9 +188,10 @@
   // CONFIG — all tunables. Coordinates are raw pixels on the 1920×1080
   // artboard (same system as index.html); the viewBox / JS scale do all
   // the responsive work.
-  // NOTE: the 10 source files on disk are .jpg (nuevo1.jpg … nuevo10.jpg),
-  // so the paths below use .jpg — anything else would 404 and leave the
-  // collage blank.
+  // NOTE: file extensions are per-source — the original 10 are .jpg
+  // (nuevo1.jpg … nuevo10.jpg), the 6 added group photos are .png
+  // (grupo1.png … grupo6.png). Mismatched extensions 404 and leave that
+  // slot blank.
   // =====================================================================
   const CONFIG = {
     artboard: { w: 1920, h: 1080 },
@@ -200,13 +200,17 @@
       'nuevo1.jpg', 'nuevo2.jpg', 'nuevo3.jpg', 'nuevo4.jpg',
       'nuevo5.jpg', 'nuevo6.jpg', 'nuevo7.jpg', 'nuevo8.jpg',
       'nuevo9.jpg', 'nuevo10.jpg',
+      'grupo1.png', 'grupo2.png', 'grupo3.png', 'grupo4.png',
+      'grupo5.png', 'grupo6.png',
     ],
     seed: 90210,                  // deterministic layout — change this
                                   // single number to reshuffle the
                                   // whole collage if the default
                                   // arrangement looks bad
-    clusterRadius: 420,           // how far slot centers scatter from
-                                  // the stage centre (artboard px)
+    cellJitter: 0.62,             // fraction of a grid cell's size used to
+                                  // scatter each photo off its cell centre —
+                                  // higher = messier / more overlap between
+                                  // neighbouring cells
     minSize: 220, maxSize: 400,   // slot width/height range
     aspectRange: [0.65, 1.5],     // width/height ratio range (mix of
                                   // portrait and landscape crops)
@@ -258,22 +262,45 @@
   }
 
   // =====================================================================
-  // 1) Generate 10 slots (position / size / rotation) with the seeded RNG.
-  //    Centers scatter around the stage middle in polar coords, biased to
-  //    the centre (sqrt of a uniform random → even areal density), so the
-  //    cluster reads as centered, not a uniform ring loaded on its edge.
+  // 1) Generate one slot per image (position / size / rotation) with the
+  //    seeded RNG. The stage is split into a coarse grid sized to the
+  //    image count, the cells are shuffled, and each photo lands with a
+  //    jittered offset from its cell centre — this spreads photos across
+  //    the FULL stage (not a centered blob) while the jitter keeps it
+  //    from reading as a tidy grid. Every slot is clamped so the photo
+  //    sits entirely inside the stage rect — nothing crosses the frame.
   // =====================================================================
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+
   const rng = mulberry32(CONFIG.seed);
-  const cx0 = CONFIG.stage.w / 2, cy0 = CONFIG.stage.h / 2;
+  const n = CONFIG.images.length;
+  const cols = Math.max(1, Math.round(Math.sqrt(n * CONFIG.stage.w / CONFIG.stage.h)));
+  const rows = Math.max(1, Math.ceil(n / cols));
+  const cellW = CONFIG.stage.w / cols;
+  const cellH = CONFIG.stage.h / rows;
+
+  // Shuffle which cell each image lands in (Fisher-Yates, seeded), so the
+  // grid's underlying order never shows through in the final layout.
+  const cellIndices = [];
+  for (let i = 0; i < cols * rows; i++) cellIndices.push(i);
+  for (let i = cellIndices.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = cellIndices[i]; cellIndices[i] = cellIndices[j]; cellIndices[j] = tmp;
+  }
+
   const slots = [];
-  for (let i = 0; i < 10; i++) {
-    const angle = rng() * Math.PI * 2;
-    const radius = Math.sqrt(rng()) * CONFIG.clusterRadius;
+  for (let i = 0; i < n; i++) {
+    const cell = cellIndices[i];
+    const col = cell % cols, row = Math.floor(cell / cols);
     const w = CONFIG.minSize + rng() * (CONFIG.maxSize - CONFIG.minSize);
     const aspect = CONFIG.aspectRange[0] + rng() * (CONFIG.aspectRange[1] - CONFIG.aspectRange[0]);
     const h = w / aspect;
-    const cx = cx0 + Math.cos(angle) * radius;
-    const cy = cy0 + Math.sin(angle) * radius;
+    const cellCx = col * cellW + cellW / 2;
+    const cellCy = row * cellH + cellH / 2;
+    const jitterX = (rng() * 2 - 1) * cellW * CONFIG.cellJitter;
+    const jitterY = (rng() * 2 - 1) * cellH * CONFIG.cellJitter;
+    const cx = clamp(cellCx + jitterX, w / 2, CONFIG.stage.w - w / 2);
+    const cy = clamp(cellCy + jitterY, h / 2, CONFIG.stage.h - h / 2);
     const rot = (rng() * 2 - 1) * CONFIG.maxRotationDeg;
     slots.push({ x: cx - w / 2, y: cy - h / 2, w, h, rot, cx, cy });
   }
