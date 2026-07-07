@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 — TIFERET</title>
+
+<!-- Theme before first paint: same key + class contract as index.html. -->
+<script>
+  try {
+    if (localStorage.getItem('beLight.theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
+
+  /* Theme tokens — same names/values as index.html so both documents flip
+     together. --panel-bg matches cap-08-hod's translucent panel. */
+  :root {
+    --bg: #FFFFFF;
+    --fg: #1a1a1a;
+    --fg-dim: rgba(26, 26, 26, 0.45);
+    --fg-faint: rgba(26, 26, 26, 0.22);
+    --line: #5E5E5E;
+    --line-w: 0.9px;
+    --panel-bg: rgba(255, 255, 255, 0.9);
+  }
+  :root.dark {
+    --bg: #000000;
+    --fg: #ffffff;
+    --fg-dim: rgba(245, 245, 240, 0.5);
+    --fg-faint: rgba(245, 245, 240, 0.25);
+    --line: #2E2E2E;
+    --panel-bg: rgba(0, 0, 0, 0.85);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Space Grotesk', sans-serif;
+    transition: background 0.45s ease, color 0.45s ease;
+  }
+
+  /* === SVG board — frame lines + margin type ============================= */
+  /* Same coordinate contract as index.html: viewBox 0 0 1920 1080 with
+     "meet" scaling. Only the 4 frame lines (no circles, no guides, no
+     nodes). Pointer events pass through except on the interactive
+     .ctrl groups. */
+  #board {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: block;
+    overflow: visible;
+    z-index: 10;
+    pointer-events: none;
+  }
+  #board .frame {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: var(--line-w);
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.45s ease;
+  }
+  #board text {
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .label-num  { fill: var(--fg-dim); transition: fill 0.45s ease; }
+  .label-name { fill: var(--fg);     transition: fill 0.45s ease; }
+  .ctrl {
+    cursor: pointer;
+    pointer-events: all;
+    fill: var(--fg-dim);
+    transition: fill 0.3s ease;
+  }
+  .ctrl:hover, .ctrl:focus-visible { fill: var(--fg); }
+  .ctrl:focus { outline: none; }
+  .ctrl .hit { fill: transparent; stroke: none; }
+
+  /* === Artboard — HTML twin of the SVG coordinate system ================= */
+  #artboard {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 1920px;
+    height: 1080px;
+    transform: translate(-50%, -50%) scale(1);
+    z-index: 1;
+  }
+
+  /* Inner stage: the frame rectangle. Clips the video + overlay + panel. */
+  #stage {
+    position: absolute;
+    left: 80px;
+    top: 80px;
+    width: 1760px;
+    height: 920px;
+    overflow: hidden;
+    background: var(--bg);
+    transition: background 0.45s ease;
+  }
+
+  #video, #overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #video { z-index: 1; }
+  #overlay {
+    z-index: 2;
+    display: none;
+    mix-blend-mode: multiply;
+    opacity: 0.5;
+    filter: blur(0px);
+    pointer-events: none;
+  }
+
+  /* === Tools panel — slides up from the frame's bottom line ============== */
+  #panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    height: var(--panel-h, 200px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    row-gap: 20px;
+    padding: 0 56px;
+    background: var(--panel-bg);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line);
+    transform: translateY(100%);
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                background 0.45s ease, border-color 0.45s ease;
+  }
+  #panel.open { transform: translateY(0); }
+
+  #panel.empty { justify-content: center; }
+  #emptyMsg {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    text-align: center;
+  }
+
+  .panel-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  /* Row 1 — capture thumbnails */
+  #thumbs {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+  }
+  .thumb {
+    flex: none;
+    width: 64px;
+    height: 40px;
+    padding: 0;
+    border: 1.5px solid var(--fg-faint);
+    background: none;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.3s ease;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .thumb:hover, .thumb:focus-visible { border-color: var(--fg-dim); }
+  .thumb.active { border-color: var(--fg); }
+
+  /* Row 2 — opacity / blur sliders + clear */
+  .slider-group { display: flex; align-items: center; gap: 18px; }
+  .slider-group label {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    white-space: nowrap;
+    transition: color 0.45s ease;
+  }
+
+  .btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--fg-dim);
+    background: none;
+    border: 1px solid var(--fg-dim);
+    padding: 12px 24px;
+    cursor: pointer;
+    transition: color 0.3s ease, border-color 0.3s ease;
+  }
+  .btn:hover, .btn:focus-visible { color: var(--fg); border-color: var(--fg); }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 220px;
+    height: 24px;
+    background: transparent;
+    cursor: pointer;
+  }
+  input[type="range"]:focus { outline: none; }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 1px;
+    background: var(--fg-dim);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    margin-top: -6px;
+    border-radius: 50%;
+    background: var(--fg);
+    transition: background 0.45s ease;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 1px;
+    background: var(--fg-dim);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border: none;
+    border-radius: 50%;
+    background: var(--fg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #panel { transition: background 0.45s ease, border-color 0.45s ease; }
+  }
+</style>
+</head>
+<body>
+
+<svg id="board" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
+  <!-- 4 "infinite" frame lines, overshooting the artboard on every side -->
+  <line class="frame" x1="-1000" y1="80"    x2="3000" y2="80"/>
+  <line class="frame" x1="-1000" y1="1000"  x2="3000" y2="1000"/>
+  <line class="frame" x1="80"    y1="-1000" x2="80"   y2="2080"/>
+  <line class="frame" x1="1840"  y1="-1000" x2="1840" y2="2080"/>
+
+  <!-- Chapter label, top-left margin -->
+  <text class="label-num"  x="120" y="45" font-size="11">06</text>
+  <text class="label-name" x="162" y="45" font-size="11">TIFERET</text>
+
+  <!-- Theme toggle, top-right margin (left of the back control) -->
+  <g class="ctrl" id="themeToggle" role="button" tabindex="0" aria-label="Cambiar tema">
+    <rect class="hit" x="1586" y="30" width="76" height="24"/>
+    <text id="themeToggleText" x="1655" y="46" font-size="11" text-anchor="end">○ LUZ</text>
+  </g>
+
+  <!-- Back to index, top-right margin -->
+  <g class="ctrl" id="backIndex" role="link" tabindex="0" aria-label="Volver al índice">
+    <rect class="hit" x="1670" y="30" width="140" height="24"/>
+    <text x="1800" y="46" font-size="11" text-anchor="end">← Índice</text>
+  </g>
+
+  <!-- Tools toggle, bottom margin, centred -->
+  <g class="ctrl" id="toolsToggle" role="button" tabindex="0"
+     aria-expanded="false" aria-label="Herramientas">
+    <rect class="hit" x="850" y="1022" width="220" height="38"/>
+    <text id="toolsToggleText" x="960" y="1045" font-size="11" text-anchor="middle">▲ HERRAMIENTAS</text>
+  </g>
+</svg>
+
+<div id="artboard">
+  <div id="stage">
+    <video id="video" autoplay loop muted playsinline></video>
+    <img id="overlay" alt="">
+
+    <div id="panel">
+      <div id="emptyMsg" style="display:none;">Creá capturas en el Capítulo 01 para usarlas de filtro acá.</div>
+
+      <div id="panelRows">
+        <div class="panel-row">
+          <div id="thumbs"></div>
+        </div>
+        <div class="panel-row">
+          <div class="slider-group">
+            <label for="opacity">Opacidad</label>
+            <input type="range" id="opacity" min="0" max="1" step="0.01" value="0.5">
+          </div>
+          <div class="slider-group">
+            <label for="blur">Desenfoque</label>
+            <input type="range" id="blur" min="0" max="20" step="1" value="0">
+          </div>
+          <button class="btn" id="clearBtn" type="button">Limpiar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // CONFIG — every tunable in one place.
+  // =====================================================================
+  const CONFIG = {
+    videoSrc: 'tiferet.mp4',
+    blendMode: 'multiply',
+    defaultOpacity: 0.5,
+    defaultBlur: 0,
+    maxBlur: 20,
+    storageKey: 'beLight.captures',
+    maxThumbs: 7,
+    panelHeight: 200,
+    panelHeightEmpty: 120,
+  };
+
+  const root = document.documentElement;
+
+  // =====================================================================
+  // Artboard scale — mirrors the SVG's preserveAspectRatio="xMidYMid meet".
+  // =====================================================================
+  const artboard = document.getElementById('artboard');
+  function fit() {
+    const s = Math.min(
+      window.innerWidth / 1920,
+      window.innerHeight / 1080
+    );
+    if (s <= 0) return;
+    artboard.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(fit).observe(document.documentElement);
+  }
+  fit();
+
+  // =====================================================================
+  // Video — local file at the project root.
+  // =====================================================================
+  const video = document.getElementById('video');
+  video.src = CONFIG.videoSrc;
+
+  // =====================================================================
+  // Overlay — reads captures from localStorage (written by Chapter 01).
+  // =====================================================================
+  const overlay = document.getElementById('overlay');
+  const panel = document.getElementById('panel');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const panelRows = document.getElementById('panelRows');
+  const thumbsEl = document.getElementById('thumbs');
+  const opacityInput = document.getElementById('opacity');
+  const blurInput = document.getElementById('blur');
+  const clearBtn = document.getElementById('clearBtn');
+
+  overlay.style.mixBlendMode = CONFIG.blendMode;
+  overlay.style.opacity = String(CONFIG.defaultOpacity);
+  overlay.style.filter = 'blur(' + CONFIG.defaultBlur + 'px)';
+  opacityInput.value = CONFIG.defaultOpacity;
+  blurInput.value = CONFIG.defaultBlur;
+  blurInput.max = CONFIG.maxBlur;
+
+  function readCaptures() {
+    try {
+      const raw = localStorage.getItem(CONFIG.storageKey);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(function (x) { return x && typeof x.image === 'string'; });
+    } catch (e) { return []; }
+  }
+
+  let activeThumb = null;
+
+  function selectCapture(image, thumbEl) {
+    overlay.src = image;
+    overlay.style.display = 'block';
+    if (activeThumb) activeThumb.classList.remove('active');
+    activeThumb = thumbEl || null;
+    if (activeThumb) activeThumb.classList.add('active');
+  }
+
+  function clearOverlay() {
+    overlay.style.display = 'none';
+    overlay.removeAttribute('src');
+    if (activeThumb) activeThumb.classList.remove('active');
+    activeThumb = null;
+  }
+
+  function buildPanel() {
+    const captures = readCaptures().slice(-CONFIG.maxThumbs);
+    const hasCaptures = captures.length > 0;
+
+    panel.classList.toggle('empty', !hasCaptures);
+    emptyMsg.style.display = hasCaptures ? 'none' : 'block';
+    panelRows.style.display = hasCaptures ? '' : 'none';
+    root.style.setProperty('--panel-h',
+      (hasCaptures ? CONFIG.panelHeight : CONFIG.panelHeightEmpty) + 'px');
+
+    thumbsEl.innerHTML = '';
+    if (!hasCaptures) { clearOverlay(); return; }
+
+    captures.forEach(function (cap) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'thumb';
+      btn.setAttribute('aria-label', 'Aplicar filtro');
+      const img = document.createElement('img');
+      img.src = cap.image;
+      img.alt = '';
+      btn.appendChild(img);
+      btn.addEventListener('click', function () { selectCapture(cap.image, btn); });
+      thumbsEl.appendChild(btn);
+    });
+  }
+
+  opacityInput.addEventListener('input', function () {
+    overlay.style.opacity = opacityInput.value;
+  });
+  blurInput.addEventListener('input', function () {
+    overlay.style.filter = 'blur(' + blurInput.value + 'px)';
+  });
+  clearBtn.addEventListener('click', clearOverlay);
+
+  buildPanel();
+  // Captures can arrive from Chapter 01 in another tab — refresh live.
+  window.addEventListener('storage', function (e) {
+    if (e.key === CONFIG.storageKey) buildPanel();
+  });
+
+  // =====================================================================
+  // Tools panel — closed by default; toggle lives in the bottom margin.
+  // =====================================================================
+  const toolsToggle = document.getElementById('toolsToggle');
+  const toolsToggleText = document.getElementById('toolsToggleText');
+  let panelOpen = false;
+  function setPanel(open) {
+    panelOpen = open;
+    panel.classList.toggle('open', open);
+    toolsToggleText.textContent = open ? '▼ HERRAMIENTAS' : '▲ HERRAMIENTAS';
+    toolsToggle.setAttribute('aria-expanded', String(open));
+  }
+  toolsToggle.addEventListener('click', function () { setPanel(!panelOpen); });
+  toolsToggle.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPanel(!panelOpen); }
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && panelOpen) setPanel(false);
+  });
+
+  // =====================================================================
+  // Back to index — hash change on the parent document, never a reload.
+  // =====================================================================
+  const backIndex = document.getElementById('backIndex');
+  function goHome() {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.location.hash = '#home';
+        return;
+      }
+    } catch (err) { /* cross-origin parent — fall through */ }
+    window.location.href = 'index.html#home';
+  }
+  backIndex.addEventListener('click', goHome);
+  backIndex.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+  });
+
+  // =====================================================================
+  // Theme toggle — same contract as the homepage.
+  // =====================================================================
+  const themeToggle = document.getElementById('themeToggle');
+  const themeToggleText = document.getElementById('themeToggleText');
+  function syncTheme() {
+    themeToggleText.textContent = root.classList.contains('dark') ? '● OSC' : '○ LUZ';
+  }
+  function flipTheme() {
+    root.classList.toggle('dark');
+    try {
+      localStorage.setItem('beLight.theme',
+        root.classList.contains('dark') ? 'dark' : 'light');
+    } catch (e) { /* storage unavailable — theme still flips for this view */ }
+    syncTheme();
+  }
+  themeToggle.addEventListener('click', flipTheme);
+  themeToggle.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipTheme(); }
+  });
+  syncTheme();
+
+  // Theme can change in another tab / the homepage — mirror it live.
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'beLight.theme') {
+      root.classList.toggle('dark', e.newValue === 'dark');
+      syncTheme();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
