@@ -282,6 +282,15 @@
     captureQuality: 0.7,             // JPEG quality for the downscaled export
     flashDuration: 200,              // ms — shutter flash (rendered in the iframe)
     storageKey: 'beLight.captures',
+    sampleImages: [
+      'imagen1.png',
+      'imagen2.png',
+      'imagen3.png',
+      'imagen4.png',
+      'imagen5.png',
+      'imagen6.png',
+      'imagen7.png',
+    ],
   };
 
   // --- Inner stage in Figma units (must match the SVG frame above) ----------
@@ -324,6 +333,12 @@
   // Session gallery: index 0 = oldest, last = newest. Array of {image, timestamp}.
   let sessionCaptures = [];
   let hintDismissed = false;
+
+  // Sample images — decorative defaults for chapter 01 only. Never written
+  // to localStorage, never read by chapter 06.
+  const sampleCaptures = CONFIG.sampleImages.map(function (src) {
+    return { image: src, timestamp: 0, sample: true };
+  });
 
   // ---- localStorage helpers -----------------------------------------------
   function loadPersisted() {
@@ -395,16 +410,17 @@
   // ---- Paint the 21 slots (oldest → newest, filling left→right, top→bottom) -
   function renderGallery() {
     const total = CONFIG.galleryRows * CONFIG.galleryCols;
+    const display = sampleCaptures.concat(sessionCaptures).slice(0, total);
     grid.innerHTML = '';
     for (let i = 0; i < total; i++) {
       const slot = document.createElement('div');
       slot.className = 'gallery-slot';
-      const cap = sessionCaptures[i];
+      const cap = display[i];
       if (cap) {
         slot.classList.add('filled');
         const img = document.createElement('img');
         img.src = cap.image;
-        img.alt = 'Captura';
+        img.alt = cap.sample ? 'Muestra' : 'Captura';
         slot.appendChild(img);
         slot.addEventListener('click', function () { openLightbox(cap.image); });
       } else {
