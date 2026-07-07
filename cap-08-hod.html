@@ -397,12 +397,12 @@
         </div>
         <div class="slider-group">
           <label for="covA">COB.</label>
-          <input type="range" id="covA" min="0" max="1" step="0.01" value="0.45"
+          <input type="range" id="covA" min="0" max="1" step="0.01" value="0.35"
                  aria-label="Cobertura color A">
         </div>
         <div class="slider-group">
           <label for="cluA">GRUPO</label>
-          <input type="range" id="cluA" min="0" max="1" step="0.01" value="0.3"
+          <input type="range" id="cluA" min="0" max="1" step="0.01" value="0.55"
                  aria-label="Agrupación color A">
         </div>
       </div>
@@ -415,12 +415,12 @@
         </div>
         <div class="slider-group">
           <label for="covB">COB.</label>
-          <input type="range" id="covB" min="0" max="1" step="0.01" value="0.4"
+          <input type="range" id="covB" min="0" max="1" step="0.01" value="0.30"
                  aria-label="Cobertura color B">
         </div>
         <div class="slider-group">
           <label for="cluB">GRUPO</label>
-          <input type="range" id="cluB" min="0" max="1" step="0.01" value="0.3"
+          <input type="range" id="cluB" min="0" max="1" step="0.01" value="0.45"
                  aria-label="Agrupación color B">
         </div>
       </div>
@@ -442,6 +442,8 @@
   const CONFIG = {
     gridCols: 24,
     gridRows: 16,
+    defaultImage: 'cap08.png',   // loaded on boot so the chapter never opens on
+                                 // the empty placeholder; a real upload overrides it
     colorA: '#00338A',       // layer 2 plate — FALLBACK, used until an image
                              // is uploaded (then replaced by extraction)
     colorB: '#FF00FF',       // layer 3 plate — fallback, same deal
@@ -451,19 +453,19 @@
       minBrightness: 15,     // ignore near-black pixels (shadows)
       maxBrightness: 240,    // ignore near-white pixels (backgrounds)
     },
-    coverageA: 0.45,         // 45% of cells covered by color A
-    coverageB: 0.40,         // 40% of cells covered by color B
+    coverageA: 0.35,         // 35% of cells covered by color A
+    coverageB: 0.30,         // 30% of cells covered by color B
     defaultOpacityImg: 1.0,
     defaultOpacityA: 0.85,
     defaultOpacityB: 0.85,
-    defaultClusterA: 0.3,    // 0 = scattered noise, 1 = continental masses
-    defaultClusterB: 0.3,
+    defaultClusterA: 0.55,   // 0 = scattered noise, 1 = continental masses
+    defaultClusterB: 0.45,
     hoverRadius: 3,          // colour-brush radius, in grid cells
     hoverFalloff: true,      // true = smooth fade to the radius edge;
                              // false = hard edge; a number = falloff
                              // exponent (higher = tighter core)
     hoverFps: 30,            // hover recalcs per second (throttle)
-    hoverDefaultOn: false,   // initial state of the HOVER toggle button
+    hoverDefaultOn: true,    // initial state of the HOVER toggle button
     clusterPeriod: { min: 0.8, max: 12 },  // noise period in cells at
                              // cluster 0 → 1 (sub-cell = pure scatter)
     labelA: 'COLOR A',       // slider label for layer 2
@@ -543,8 +545,8 @@
     covB: CONFIG.coverageB,
     cluA: CONFIG.defaultClusterA,
     cluB: CONFIG.defaultClusterB,
-    seedA: (Math.random() * 0x7fffffff) | 0,
-    seedB: (Math.random() * 0x7fffffff) | 0,
+    seedA: 482917635,        // fixed → the same composition on every first load
+    seedB: 1739204856,       // (shuffle still re-randomizes both seeds)
   };
 
   function hash2(ix, iy, seed) {
@@ -597,6 +599,7 @@
   }
   regenA();
   regenB();
+  loadDefaultImage();
 
   // =====================================================================
   // Image upload — the image is cover-cropped to the stage, then each
@@ -712,6 +715,23 @@
     };
     probe.onerror = function () { URL.revokeObjectURL(url); };
     probe.src = url;
+  }
+
+  // Default image on boot — same path as an upload (extract → palette →
+  // image), so the chapter opens on a real composition instead of the empty
+  // placeholder. The default is a plain same-origin path, not an object URL,
+  // so there's no createObjectURL bookkeeping; stashing it in currentURL just
+  // lets the first real upload run its revoke step harmlessly.
+  function loadDefaultImage() {
+    const img = new Image();
+    img.onload = function () {
+      const palette = extractColors(img);
+      if (palette) applyPalette(palette[0], palette[1]);
+      applyImage(CONFIG.defaultImage, img.naturalWidth, img.naturalHeight);
+      currentURL = CONFIG.defaultImage;
+      placeholder.style.display = 'none';
+    };
+    img.src = CONFIG.defaultImage;
   }
 
   const fileInput = document.getElementById('fileInput');
@@ -954,6 +974,22 @@
   }
   hoverBtn.addEventListener('click', function () { setHover(!hoverMode); });
   setHover(CONFIG.hoverDefaultOn);
+
+  // Pre-stamp a deterministic scattered set of cells for the default state.
+  // These indices carve reveal windows into the colour plates.
+  const defaultStamps = [];
+  const stampRng = function(i) {
+    let n = Math.imul(i, 374761393) ^ 0xA5A5A5A5;
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < N; i++) {
+    if (stampRng(i) < 0.12) defaultStamps.push(i);
+  }
+  defaultStamps.forEach(function(i) {
+    stamped.add(i);
+    setCellW(i, 1);
+  });
 
   // Hover-radius slider (RADIO) — 1 (precision, single cell) up to the
   // CONFIG maximum, whole steps, defaulting to the max. Updates live.
