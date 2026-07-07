@@ -197,48 +197,25 @@
   // CONFIG — all tunables.
   // =====================================================================
   const CONFIG = {
-    artboard: { w: 1920, h: 1080 },
-    stage: { x: 80, y: 80, w: 1760, h: 920 },
     scrollHeight: 20000,
     palette: ['#8EABBF', '#C8D4D3', '#B7364C', '#F85794', '#F89626'],
-    seed: 42069,
-    vLinesRange: [8, 220],       // vertical line count at top vs bottom
-    hLinesRange: [4, 160],       // horizontal line count
-    thicknessRange: [0.5, 3],
-    opacityRange: [0.3, 1.0],
-    frameDelay: 800,             // ms before frame starts fading out
-    frameFade: 1500,             // ms fade duration
-    frameShowThreshold: 100,     // scrollY px — frame reappears below this
-
-    // --- extra tunables (beyond the brief, exposed for tweaking) ---------
-    colorJitter: 0.05,           // per-line wobble in palette-t so neighbours differ
-    dprCap: 1.5,                 // cap devicePixelRatio (performance)
+    hLine: { height: 24, spacing: 9 },
+    vThin: { width: 2, spacing: 13, opacity: 0.85 },
+    vThick: { width: 6, spacing: 30, gapFromThin: 4 },
+    frameDelay: 800,
+    frameFade: 1500,
+    frameShowThreshold: 100,
   };
+
+  // Fixed layout constants (not tunables).
+  const ARTBOARD = { w: 1920, h: 1080 };
+  const DPR_CAP = 1.5;   // cap devicePixelRatio (performance)
 
   const root = document.documentElement;
   // Drive the board's fade duration from CONFIG (CSS reads --frame-fade).
   root.style.setProperty('--frame-fade', CONFIG.frameFade + 'ms');
 
-  // =====================================================================
-  // Small math helpers.
-  // =====================================================================
-  function lerp(a, b, t) { return a + (b - a) * t; }
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
-  function smoothstep(t) { return t * t * (3 - 2 * t); }
-
-  // Seeded PRNG — same mulberry32 the rest of the codebase uses, so the field
-  // is identical on every reload. Re-seeded fresh each paint: because a paint
-  // draws a growing PREFIX of the same sequence, lines 0..N keep their exact
-  // place as the count grows — the field ACCUMULATES in place (fills in) as
-  // you scroll rather than sliding or reshuffling.
-  function mulberry32(seed) {
-    return function () {
-      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
 
   // =====================================================================
   // Palette — parse the 5 hex stops to [r,g,b] once; interpolate in RGB.
@@ -252,35 +229,44 @@
     ];
   }
   const PAL = CONFIG.palette.map(hexToRgb);
-  const scratch = [0, 0, 0];
-  // Map t in [0,1] across the palette (stops evenly spaced) into `out`.
-  function paletteColor(t, out) {
+  const STEEL = PAL[0], SAGE = PAL[1], CRIMSON = PAL[2], PINK = PAL[3], ORANGE = PAL[4];
+
+  // Gradient-endpoint tracks. Each track is a row of evenly spaced colour
+  // stops; sampling it at t ∈ [0,1] interpolates smoothly between adjacent
+  // stops (no hard banding). A line's two gradient endpoints come from
+  // sampling a START track and an END track at the same t.
+  //
+  // Horizontals (t = absolute y / scrollHeight), gradient left→right cold→warm:
+  //   top: steel→sage · 25%: sage→crimson · 50%: crimson→pink ·
+  //   75%: pink→orange · bottom: orange→pink
+  const H_START = [STEEL, SAGE, CRIMSON, PINK, ORANGE];
+  const H_END   = [SAGE, CRIMSON, PINK, ORANGE, PINK];
+  // Thin verticals (t = x / viewport width), warm→cold — reversed direction:
+  //   left: orange→pink · 25%: pink→crimson · 50%: crimson→sage ·
+  //   75%: sage→steel · right: steel→sage
+  const VT_START = [ORANGE, PINK, CRIMSON, SAGE, STEEL];
+  const VT_END   = [PINK, CRIMSON, SAGE, STEEL, SAGE];
+  // Thick verticals (t = scroll progress), gradient top→bottom warm→warm:
+  //   top of scroll: orange→pink · 33%: pink→crimson ·
+  //   66%: crimson→pink · bottom: pink→orange
+  const VK_TOP    = [ORANGE, PINK, CRIMSON, PINK];
+  const VK_BOTTOM = [PINK, CRIMSON, PINK, ORANGE];
+
+  function sampleTrack(track, t, out) {
     t = clamp(t, 0, 1);
-    const seg = t * (PAL.length - 1);
+    const seg = t * (track.length - 1);
     let i = Math.floor(seg);
-    if (i > PAL.length - 2) i = PAL.length - 2;
+    if (i > track.length - 2) i = track.length - 2;
     const f = seg - i;
-    const a = PAL[i], b = PAL[i + 1];
+    const a = track[i], b = track[i + 1];
     out[0] = a[0] + (b[0] - a[0]) * f;
     out[1] = a[1] + (b[1] - a[1]) * f;
     out[2] = a[2] + (b[2] - a[2]) * f;
     return out;
   }
 
-  // Per-line thickness / opacity: both grow from the cold, faint top to the
-  // dense, opaque bottom. Bands anchored to CONFIG so the ends stay tunable.
-  function lineThickness(p, r) {
-    const lo = CONFIG.thicknessRange[0] + p * (1.0 - CONFIG.thicknessRange[0]); // 0.5 -> 1
-    const hi = 1.0 + p * (CONFIG.thicknessRange[1] - 1.0);                       // 1 -> 3
-    return lo + r * (hi - lo);
-  }
-  function lineOpacity(p, r) {
-    const lo = CONFIG.opacityRange[0] + p * 0.4;                 // 0.3 -> 0.7
-    const hi = 0.6 + p * (CONFIG.opacityRange[1] - 0.6);         // 0.6 -> 1.0
-    return lo + r * (hi - lo);
-  }
+  const cA = [0, 0, 0], cB = [0, 0, 0], cMid = [0, 0, 0];
 
-  // Build an rgb() string from the scratch colour (values are floats -> floor).
   function rgbStr(c) {
     return 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
   }
@@ -298,63 +284,95 @@
 
   function resizeCanvas() {
     const vw = window.innerWidth, vh = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, CONFIG.dprCap);
+    const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
     canvas.width = Math.round(vw * dpr);
     canvas.height = Math.round(vh * dpr);
     canvas.style.width = vw + 'px';
     canvas.style.height = vh + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // draw in CSS pixels
+    hGradCache.clear();                       // gradients are vw-dependent
     draw();
   }
 
-  // One repaint: clear to --bg, then the accumulating grids of vertical and
-  // horizontal lines. The vertical count grows LINEARLY with scroll; the
-  // horizontal count grows on a SMOOTHSTEP curve (fastest through the middle)
-  // so a dense cross-hatch blooms in the warm-crimson centre. The interference
-  // between the two grids at different densities is the optical (moiré)
-  // movement — no animation loop, the scroll-driven repaint is the motion.
+  // Repeating units.
+  //  - Horizontal: one 24px line + 9px gap = 33px, tiled down the full
+  //    20000px scroll field (lines live at ABSOLUTE y; the fixed canvas is a
+  //    window sliding over them).
+  //  - Vertical: [thin 2px][4px gap][thick 6px][13px gap] = 25px, tiled
+  //    across the viewport width. (Unit derived from widths + gaps;
+  //    vThick.spacing is the design-spec figure, not used in the tiling.)
+  const H_UNIT = CONFIG.hLine.height + CONFIG.hLine.spacing;
+  const V_UNIT = CONFIG.vThin.width + CONFIG.vThick.gapFromThin +
+                 CONFIG.vThick.width + CONFIG.vThin.spacing;
+  const V_THICK_OFFSET = CONFIG.vThin.width + CONFIG.vThick.gapFromThin;
+
+  // Horizontal-line gradients cached by absolute line index. A line's two
+  // endpoints depend only on its fixed y in the scroll field, so its gradient
+  // never changes — cleared only on resize (gradient width = vw). Full-depth
+  // worst case is ~606 entries; trivial to hold.
+  const hGradCache = new Map();
+  function hGradient(index, vw) {
+    let g = hGradCache.get(index);
+    if (g) return g;
+    const t = (index * H_UNIT) / CONFIG.scrollHeight;
+    sampleTrack(H_START, t, cA);
+    sampleTrack(H_END, t, cB);
+    g = ctx.createLinearGradient(0, 0, vw, 0);
+    g.addColorStop(0, rgbStr(cA));
+    g.addColorStop(1, rgbStr(cB));
+    hGradCache.set(index, g);
+    return g;
+  }
+
+  // One repaint: clear to --bg, then the three line types back-to-front —
+  // horizontals, thin verticals (translucent, so the horizontals bleed
+  // through), thick verticals. The scroll-driven colour drift of each layer
+  // against the fixed geometry of the others is the moiré movement.
   function draw() {
     const vw = window.innerWidth, vh = window.innerHeight;
+    const scrollY = window.scrollY;
     const maxScroll = CONFIG.scrollHeight - vh;
-    const progress = maxScroll > 0 ? clamp(window.scrollY / maxScroll, 0, 1) : 0;
+    const progress = maxScroll > 0 ? clamp(scrollY / maxScroll, 0, 1) : 0;
 
     ctx.globalAlpha = 1;
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, vw, vh);
 
-    // Vertical lines — count linear in progress, positions seeded-stable.
-    const nV = Math.round(lerp(CONFIG.vLinesRange[0], CONFIG.vLinesRange[1], progress));
-    const rv = mulberry32(CONFIG.seed);
-    for (let k = 0; k < nV; k++) {
-      const xFrac = rv();
-      const cJit = rv() * 2 - 1;
-      const tR = rv();
-      const oR = rv();
-      const x = xFrac * vw;
-      paletteColor(progress + cJit * CONFIG.colorJitter, scratch);
-      const thick = lineThickness(progress, tR);
-      ctx.globalAlpha = lineOpacity(progress, oR);
-      ctx.fillStyle = rgbStr(scratch);
-      ctx.fillRect(x - thick / 2, 0, thick, vh);
+    // 1) Horizontal lines — only the rows inside the scroll window.
+    const first = Math.max(0, Math.floor(scrollY / H_UNIT));
+    const count = Math.ceil(vh / H_UNIT) + 1;
+    for (let i = first; i < first + count; i++) {
+      ctx.fillStyle = hGradient(i, vw);
+      ctx.fillRect(0, i * H_UNIT - scrollY, vw, CONFIG.hLine.height);
     }
 
-    // Horizontal lines — count on a smoothstep curve, own seeded stream.
-    const nH = Math.round(lerp(CONFIG.hLinesRange[0], CONFIG.hLinesRange[1], smoothstep(progress)));
-    const rh = mulberry32(CONFIG.seed ^ 0x9E3779B9);
-    for (let k = 0; k < nH; k++) {
-      const yFrac = rh();
-      const cJit = rh() * 2 - 1;
-      const tR = rh();
-      const oR = rh();
-      const y = yFrac * vh;
-      paletteColor(progress + cJit * CONFIG.colorJitter, scratch);
-      const thick = lineThickness(progress, tR);
-      ctx.globalAlpha = lineOpacity(progress, oR);
-      ctx.fillStyle = rgbStr(scratch);
-      ctx.fillRect(0, y - thick / 2, vw, thick);
+    // 2) Thin verticals — fixed columns; a 2px-wide gradient is
+    //    imperceptible, so each is filled with its gradient's midpoint
+    //    colour, sampled from the warm→cold tracks at its x-position.
+    ctx.globalAlpha = CONFIG.vThin.opacity;
+    for (let x = 0; x < vw; x += V_UNIT) {
+      const t = (x + CONFIG.vThin.width / 2) / vw;
+      sampleTrack(VT_START, t, cA);
+      sampleTrack(VT_END, t, cB);
+      cMid[0] = (cA[0] + cB[0]) / 2;
+      cMid[1] = (cA[1] + cB[1]) / 2;
+      cMid[2] = (cA[2] + cB[2]) / 2;
+      ctx.fillStyle = rgbStr(cMid);
+      ctx.fillRect(x, 0, CONFIG.vThin.width, vh);
     }
 
+    // 3) Thick verticals — fixed columns sharing ONE top→bottom gradient
+    //    whose warm endpoints drift with scroll progress.
     ctx.globalAlpha = 1;
+    sampleTrack(VK_TOP, progress, cA);
+    sampleTrack(VK_BOTTOM, progress, cB);
+    const g = ctx.createLinearGradient(0, 0, 0, vh);
+    g.addColorStop(0, rgbStr(cA));
+    g.addColorStop(1, rgbStr(cB));
+    ctx.fillStyle = g;
+    for (let x = 0; x < vw; x += V_UNIT) {
+      ctx.fillRect(x + V_THICK_OFFSET, 0, CONFIG.vThick.width, vh);
+    }
   }
 
   // Repaint is gated by a single rAF so a burst of scroll events coalesces
@@ -409,8 +427,8 @@
   const artboard = document.getElementById('artboard');
   function fit() {
     const s = Math.min(
-      window.innerWidth / CONFIG.artboard.w,
-      window.innerHeight / CONFIG.artboard.h
+      window.innerWidth / ARTBOARD.w,
+      window.innerHeight / ARTBOARD.h
     );
     if (s <= 0) return;
     artboard.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
