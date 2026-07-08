@@ -128,7 +128,7 @@
     height: 920px;
     overflow: hidden;
     background: var(--bg);
-    transition: background 0.45s ease;
+    transition: background 0.45s ease, opacity 0.3s ease-in;
   }
 
   /* === The three stacked grids ========================================== */
@@ -434,6 +434,12 @@
 (function () {
   'use strict';
 
+  // Hide the stage until the default image is fully composited — the plates,
+  // pre-stamps and grid all paint synchronously with the FALLBACK palette
+  // (magenta/blue) before cap08.png loads; revealing only on the image's
+  // onload avoids that flash of the old state on entry.
+  document.getElementById('stage').style.opacity = '0';
+
   // =====================================================================
   // CONFIG — all tunables. Coordinates are raw pixels on the 1920×1080
   // artboard (same system as index.html); the viewBox / JS scale do all
@@ -730,6 +736,14 @@
       applyImage(CONFIG.defaultImage, img.naturalWidth, img.naturalHeight);
       currentURL = CONFIG.defaultImage;
       placeholder.style.display = 'none';
+      // Everything is composited (palette + image + the pre-stamps applied
+      // synchronously during boot) — now reveal the stage in one clean fade.
+      document.getElementById('stage').style.opacity = '1';
+    };
+    // Safety net: if the default image can't load, still reveal the stage so
+    // the chapter shows its plate composition rather than staying blank.
+    img.onerror = function () {
+      document.getElementById('stage').style.opacity = '1';
     };
     img.src = CONFIG.defaultImage;
   }
