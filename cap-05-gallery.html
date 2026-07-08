@@ -128,6 +128,21 @@
     -webkit-user-drag: none;
     pointer-events: none;
   }
+
+  /* === Glass filters ===================================================== */
+  /* Two draggable frosted lenses, absolutely positioned in raw stage pixels
+     above the photos. Each is a <canvas> that re-samples the shared offscreen
+     source through a faceted refraction/dispersion/frost pipeline; the drop
+     shadow ("depth") and the faint inset edge are plain CSS, set per lens
+     from CONFIG. */
+  .glass-filter {
+    position: absolute;
+    display: block;
+    cursor: grab;
+    touch-action: none;   /* the drag IS the gesture — never scroll */
+    user-select: none;
+  }
+  .glass-filter.dragging { cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -205,6 +220,38 @@
       ],
     },
     panelImage: 'TODOJUNTO.jpg',   // right panel, fills remaining width
+    glass: {
+      // Two draggable frosted lenses floating over the stage. Positions are
+      // stage-relative px (top-left corner) and freely tunable. The optical
+      // values are the mapped 0–100 knob settings from the spec — the knob
+      // value is noted next to each mapping.
+      filters: [
+        {
+          name: 'Lente cuadrada',
+          cols: 4, rows: 4, cellW: 75, cellH: 75,   // 4×4 squares → 300×300
+          x: 480, y: 400,          // default: overlapped by the other lens
+          refraction: 0.04,        // Refraction 18 — subtle pull toward cell centre
+          dispersion: 3,           // Dispersion 100 — R +3px / B −3px radial split
+          frostSigma: 1.2,         // Frost 10 — barely-there blur
+          splay: 1,                // Splay 3 — ±1px per-cell jitter
+          shadow: '0 3px 12px rgba(0, 0, 0, 0.2)',  // Depth 61
+        },
+        {
+          name: 'Lente horizontal',
+          cols: 1, rows: 2, cellW: 300, cellH: 75,  // 2 stacked bars → 300×150
+          x: 540, y: 520,          // overlaps the square lens from below-right
+          refraction: 0.15,        // Refraction 73 — strong
+          dispersion: 3,           // Dispersion 100 — R +3px / B −3px radial split
+          frostSigma: 8,           // Frost 73 — clearly frosted
+          splay: 6,                // Splay 49 — ±6px per-cell jitter
+          shadow: '0 6px 24px rgba(0, 0, 0, 0.35)', // Depth 100
+        },
+      ],
+      gridLine: 'rgba(255, 255, 255, 0.35)',   // hairlines between cells
+      innerBorder: 'rgba(255, 255, 255, 0.3)', // faint 1px inset edge (depth)
+      seed: 6103,      // per-cell splay jitter — reload-stable
+      maxDpr: 2,       // devicePixelRatio cap for the lens canvases
+    },
   };
 
   // =====================================================================
@@ -221,11 +268,18 @@
     if (s <= 0) return;   // viewport not laid out yet — wait for a real size
     artboard.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
   }
-  window.addEventListener('resize', fit);
+  function onResize() {
+    fit();
+    // Filter positions live in stage units, so the artboard transform
+    // already rescales them; only the effective pixel ratio can change
+    // (e.g. the window moves to another display).
+    syncLensRes(false);
+  }
+  window.addEventListener('resize', onResize);
   // The iframe can be attached before it has a size (no resize event fires
   // for the zero→sized transition) — observe the root element as well.
   if ('ResizeObserver' in window) {
-    new ResizeObserver(fit).observe(document.documentElement);
+    new ResizeObserver(onResize).observe(document.documentElement);
   }
   fit();
 
@@ -241,6 +295,9 @@
   const panelX = inset + gridW + gap;                          // 960
   const panelW = CONFIG.stage.w - inset - panelX;              // 760
 
+  // Every placed photo is also recorded so the glass filters can redraw the
+  // same picture onto their shared offscreen source canvas.
+  const photoRecords = [];
   function addPhoto(src, x, y, w, h) {
     const el = document.createElement('img');
     el.className = 'gallery-photo';
@@ -252,6 +309,7 @@
     el.style.width = w + 'px';
     el.style.height = h + 'px';
     stage.appendChild(el);
+    photoRecords.push({ el: el, x: x, y: y, w: w, h: h });
   }
 
   // Left panel: 4×5 grid, row-major.
@@ -269,6 +327,330 @@
 
   // Right panel: one image, same height as the grid.
   addPhoto(CONFIG.panelImage, panelX, inset, panelW, contentH);
+
+  // =====================================================================
+  // GLASS FILTERS — two draggable frosted lenses floating over the whole
+  // stage. Each lens is a <canvas> that re-samples a shared offscreen
+  // picture of the stage (bg + the 20 photos + TODOJUNTO) through a
+  // faceted-glass pipeline, per cell of its grid:
+  //   refraction — every sample is pulled toward its cell centre
+  //   splay      — a seeded per-cell jitter on that displacement
+  //   dispersion — R sampled outward / B inward along the radial axis
+  //                (G stays put) → chromatic fringing at cell edges
+  //   frost      — separable box blur over the finished lens
+  // "Depth" is never computed per-pixel: it is the CSS box-shadow plus a
+  // faint inset border on the canvas element itself.
+  // =====================================================================
+
+  // --- Shared offscreen source: 1 canvas px per stage/viewBox unit -------
+  const srcW = CONFIG.stage.w, srcH = CONFIG.stage.h;
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = srcW;
+  srcCanvas.height = srcH;
+  const srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
+  let srcPix = null;   // Uint8ClampedArray of the current source frame
+
+  function drawSource() {
+    const bg = getComputedStyle(root).getPropertyValue('--bg').trim() || '#FFFFFF';
+    srcCtx.fillStyle = bg;
+    srcCtx.fillRect(0, 0, srcW, srcH);
+    for (let i = 0; i < photoRecords.length; i++) {
+      const rec = photoRecords[i];
+      const img = rec.el;
+      if (!img.naturalWidth) continue;   // failed load — bg shows, like the DOM
+      // Replicate object-fit: cover — centre-crop to the cell's aspect.
+      const scale = Math.max(rec.w / img.naturalWidth, rec.h / img.naturalHeight);
+      const sw = rec.w / scale, sh = rec.h / scale;
+      srcCtx.drawImage(img,
+        (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh,
+        rec.x, rec.y, rec.w, rec.h);
+    }
+    srcPix = srcCtx.getImageData(0, 0, srcW, srcH).data;
+  }
+
+  // Nearest-neighbour source read, clamped to the stage — the frost pass
+  // smooths away any stepping, so no bilinear filtering is needed.
+  function samp(x, y, c) {
+    let xi = x | 0, yi = y | 0;
+    if (xi < 0) xi = 0; else if (xi >= srcW) xi = srcW - 1;
+    if (yi < 0) yi = 0; else if (yi >= srcH) yi = srcH - 1;
+    return srcPix[(yi * srcW + xi) * 4 + c];
+  }
+
+  // Seeded PRNG — same reload-stable approach as the other chapters.
+  function mulberry32(seed) {
+    return function () {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+
+  function currentRes() {
+    return Math.min(window.devicePixelRatio || 1, CONFIG.glass.maxDpr);
+  }
+
+  // Pointer position → stage-relative viewBox units (inverts the artboard
+  // scale — same math the SVG's "meet" fitting applies).
+  function stagePoint(e) {
+    const rect = stage.getBoundingClientRect();
+    const s = rect.width / CONFIG.stage.w;
+    return { x: (e.clientX - rect.left) / s, y: (e.clientY - rect.top) / s };
+  }
+
+  // --- Frost: separable box blur (H then V), edge-clamped, RGB only ------
+  function boxBlurH(src, dst, W, H, r) {
+    const inv = 1 / (2 * r + 1);
+    for (let y = 0; y < H; y++) {
+      const row = y * W;
+      let sr = 0, sg = 0, sb = 0;
+      for (let ix = -r; ix <= r; ix++) {
+        const cx = ix < 0 ? 0 : (ix >= W ? W - 1 : ix);
+        const o = (row + cx) * 4;
+        sr += src[o]; sg += src[o + 1]; sb += src[o + 2];
+      }
+      for (let x = 0; x < W; x++) {
+        const o = (row + x) * 4;
+        dst[o] = sr * inv;
+        dst[o + 1] = sg * inv;
+        dst[o + 2] = sb * inv;
+        dst[o + 3] = 255;
+        const ax = x + r + 1, sx = x - r;
+        const ao = (row + (ax >= W ? W - 1 : ax)) * 4;
+        const so = (row + (sx < 0 ? 0 : sx)) * 4;
+        sr += src[ao] - src[so];
+        sg += src[ao + 1] - src[so + 1];
+        sb += src[ao + 2] - src[so + 2];
+      }
+    }
+  }
+  function boxBlurV(src, dst, W, H, r) {
+    const inv = 1 / (2 * r + 1);
+    for (let x = 0; x < W; x++) {
+      let sr = 0, sg = 0, sb = 0;
+      for (let iy = -r; iy <= r; iy++) {
+        const cy = iy < 0 ? 0 : (iy >= H ? H - 1 : iy);
+        const o = (cy * W + x) * 4;
+        sr += src[o]; sg += src[o + 1]; sb += src[o + 2];
+      }
+      for (let y = 0; y < H; y++) {
+        const o = (y * W + x) * 4;
+        dst[o] = sr * inv;
+        dst[o + 1] = sg * inv;
+        dst[o + 2] = sb * inv;
+        dst[o + 3] = 255;
+        const ay = y + r + 1, sy = y - r;
+        const ao = ((ay >= H ? H - 1 : ay) * W + x) * 4;
+        const so = ((sy < 0 ? 0 : sy) * W + x) * 4;
+        sr += src[ao] - src[so];
+        sg += src[ao + 1] - src[so + 1];
+        sb += src[ao + 2] - src[so + 2];
+      }
+    }
+  }
+
+  // --- Per-lens render ----------------------------------------------------
+  function paintLens(lens) {
+    if (!srcPix) return;   // photos still loading — painted when ready
+    const cfg = lens.cfg;
+    const res = lens.res, W = lens.W, H = lens.H;
+    const data = lens.out.data;
+    const k = cfg.refraction, disp = cfg.dispersion, cols = cfg.cols;
+    const fxA = lens.fxA, dxA = lens.dxA, colA = lens.colA;
+    const jxA = lens.jxA, jyA = lens.jyA;
+    const ox = lens.x, oy = lens.y;
+    let i = 0;
+    for (let py = 0; py < H; py++) {
+      const dy = lens.dyA[py];
+      const rowBase = lens.rowA[py] * cols;
+      // base sample y for this row: lens origin + pixel + refraction pull
+      const byRow = oy + lens.fyA[py] + dy * k;
+      for (let px = 0; px < W; px++, i += 4) {
+        const dx = dxA[px];
+        const cell = rowBase + colA[px];
+        const bx = ox + fxA[px] + dx * k + jxA[cell];
+        const by = byRow + jyA[cell];
+        // radial unit vector pointing OUTWARD from the cell centre
+        const d = Math.sqrt(dx * dx + dy * dy);
+        let ux = 0, uy = 0;
+        if (d > 1e-4) { ux = -dx / d; uy = -dy / d; }
+        data[i]     = samp(bx + ux * disp, by + uy * disp, 0);   // R outward
+        data[i + 1] = samp(bx, by, 1);                           // G in place
+        data[i + 2] = samp(bx - ux * disp, by - uy * disp, 2);   // B inward
+        data[i + 3] = 255;
+      }
+    }
+
+    // Frost — radius in device px derived from the lens's sigma.
+    const r = Math.round(cfg.frostSigma * res);
+    if (r > 0) {
+      boxBlurH(data, lens.tmp, W, H, r);
+      boxBlurV(lens.tmp, data, W, H, r);
+    }
+    lens.ctx.putImageData(lens.out, 0, 0);
+
+    // Cell hairlines — drawn after the blur so they stay crisp.
+    const lw = Math.max(1, Math.round(res));   // 1 viewBox px, in device px
+    lens.ctx.fillStyle = CONFIG.glass.gridLine;
+    for (let c = 1; c < cfg.cols; c++) {
+      lens.ctx.fillRect(Math.round(c * cfg.cellW * res - lw / 2), 0, lw, H);
+    }
+    for (let rw = 1; rw < cfg.rows; rw++) {
+      lens.ctx.fillRect(0, Math.round(rw * cfg.cellH * res - lw / 2), W, lw);
+    }
+  }
+
+  let topZ = 19;   // first grab lands at z 20; every later grab goes above
+
+  function createLens(cfg, index, baseZ) {
+    const w = cfg.cols * cfg.cellW;
+    const h = cfg.rows * cfg.cellH;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'glass-filter';
+    canvas.setAttribute('aria-label', cfg.name);
+    canvas.style.left = cfg.x + 'px';
+    canvas.style.top = cfg.y + 'px';
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.style.zIndex = String(baseZ);
+    // Depth: outer shadow + faint 1px inset edge — CSS only, never sampled.
+    canvas.style.boxShadow = cfg.shadow + ', inset 0 0 0 1px ' + CONFIG.glass.innerBorder;
+    const ctx = canvas.getContext('2d');
+
+    // Per-cell splay offsets, seeded so the lens looks the same on reload.
+    const rng = mulberry32(CONFIG.glass.seed + index * 101);
+    const cells = cfg.cols * cfg.rows;
+    const jxA = new Float32Array(cells);
+    const jyA = new Float32Array(cells);
+    for (let i = 0; i < cells; i++) {
+      jxA[i] = (rng() * 2 - 1) * cfg.splay;
+      jyA[i] = (rng() * 2 - 1) * cfg.splay;
+    }
+
+    const lens = {
+      cfg: cfg, canvas: canvas, ctx: ctx,
+      w: w, h: h, x: cfg.x, y: cfg.y,
+      jxA: jxA, jyA: jyA,
+      res: 0, W: 0, H: 0,
+      out: null, tmp: null,
+      fxA: null, dxA: null, colA: null,
+      fyA: null, dyA: null, rowA: null,
+      dragging: false, dragX: 0, dragY: 0, rafPending: false,
+    };
+
+    // Everything that depends on the device pixel ratio lives here so a
+    // display change can rebuild it. Buffers and the per-axis lookup
+    // tables are reused between paints — no per-frame allocations.
+    lens.alloc = function (res) {
+      lens.res = res;
+      const W = Math.round(w * res), H = Math.round(h * res);
+      lens.W = W; lens.H = H;
+      canvas.width = W;
+      canvas.height = H;
+      lens.out = ctx.createImageData(W, H);
+      lens.tmp = new Uint8ClampedArray(lens.out.data.length);
+      lens.fxA = new Float32Array(W);
+      lens.dxA = new Float32Array(W);
+      lens.colA = new Int32Array(W);
+      lens.fyA = new Float32Array(H);
+      lens.dyA = new Float32Array(H);
+      lens.rowA = new Int32Array(H);
+      for (let px = 0; px < W; px++) {
+        const fx = (px + 0.5) / res;
+        const col = Math.min(cfg.cols - 1, Math.floor(fx / cfg.cellW));
+        lens.fxA[px] = fx;
+        lens.colA[px] = col;
+        lens.dxA[px] = (col + 0.5) * cfg.cellW - fx;   // vector toward centre, x
+      }
+      for (let py = 0; py < H; py++) {
+        const fy = (py + 0.5) / res;
+        const row = Math.min(cfg.rows - 1, Math.floor(fy / cfg.cellH));
+        lens.fyA[py] = fy;
+        lens.rowA[py] = row;
+        lens.dyA[py] = (row + 0.5) * cfg.cellH - fy;   // vector toward centre, y
+      }
+    };
+
+    lens.paint = function () { paintLens(lens); };
+
+    // rAF-throttled repaint: drags repaint at most once per frame.
+    lens.schedule = function () {
+      if (lens.rafPending) return;
+      lens.rafPending = true;
+      requestAnimationFrame(function () {
+        lens.rafPending = false;
+        lens.paint();
+      });
+    };
+
+    // Drag: pointer events with capture, constrained to the stage. The
+    // grabbed lens jumps above everything and stays there on release.
+    canvas.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* stale pointer id */ }
+      canvas.classList.add('dragging');
+      canvas.style.zIndex = String(++topZ);
+      const p = stagePoint(e);
+      lens.dragX = p.x - lens.x;
+      lens.dragY = p.y - lens.y;
+      lens.dragging = true;
+    });
+    canvas.addEventListener('pointermove', function (e) {
+      if (!lens.dragging) return;
+      const p = stagePoint(e);
+      lens.x = clamp(p.x - lens.dragX, 0, CONFIG.stage.w - w);
+      lens.y = clamp(p.y - lens.dragY, 0, CONFIG.stage.h - h);
+      canvas.style.left = lens.x + 'px';
+      canvas.style.top = lens.y + 'px';
+      lens.schedule();
+    });
+    function endDrag() {
+      lens.dragging = false;
+      canvas.classList.remove('dragging');
+    }
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+
+    lens.alloc(currentRes());
+    stage.appendChild(canvas);
+    return lens;
+  }
+
+  // Base stacking: photos (no z-index) < lens A (10) < lens B (11).
+  const lenses = CONFIG.glass.filters.map(function (cfg, i) {
+    return createLens(cfg, i, 10 + i);
+  });
+
+  function repaintLenses() {
+    for (let i = 0; i < lenses.length; i++) lenses[i].paint();
+  }
+
+  // Reallocate + repaint only when the effective pixel ratio changed.
+  function syncLensRes(force) {
+    const res = currentRes();
+    for (let i = 0; i < lenses.length; i++) {
+      if (force || lenses[i].res !== res) {
+        lenses[i].alloc(res);
+        lenses[i].paint();
+      }
+    }
+  }
+
+  // First paint once every photo settles (load OR error — a broken file
+  // just leaves bg in the source, exactly like the visible grid).
+  Promise.all(photoRecords.map(function (rec) {
+    return new Promise(function (resolve) {
+      if (rec.el.complete) return resolve();
+      rec.el.addEventListener('load', resolve, { once: true });
+      rec.el.addEventListener('error', resolve, { once: true });
+    });
+  })).then(function () {
+    drawSource();
+    syncLensRes(true);
+  });
 
   // =====================================================================
   // Back to index — hash change on the parent document, never a reload.
@@ -306,6 +688,10 @@
         root.classList.contains('dark') ? 'dark' : 'light');
     } catch (e) { /* storage unavailable — theme still flips for this view */ }
     syncTheme();
+    // The glass filters sample the offscreen source, not the live DOM —
+    // rebuild it so the gaps show the new --bg through the lenses.
+    drawSource();
+    repaintLenses();
   }
   themeToggle.addEventListener('click', flipTheme);
   themeToggle.addEventListener('keydown', function (e) {
@@ -318,6 +704,8 @@
     if (e.key === 'beLight.theme') {
       root.classList.toggle('dark', e.newValue === 'dark');
       syncTheme();
+      drawSource();
+      repaintLenses();
     }
   });
 })();
