@@ -41,7 +41,10 @@
   /* Unlike every other chapter this one SCROLLS: a 20000px surface whose
      scroll position drives the paint. overflow-x is clipped so the full-bleed
      field can never spawn a horizontal scrollbar. */
-  html, body {
+  /* The <html> element is the scroll surface — it alone owns the 20000px
+     scroll. overflow-x is clipped here so the full-bleed field can never
+     spawn a horizontal scrollbar. */
+  html {
     width: 100%;
     overflow-x: hidden;
     overflow-y: auto;
@@ -50,6 +53,17 @@
        iframe) and scroll-chaining to the parent at the ends of the 20000px
        surface. (Parity with cap-05.) */
     overscroll-behavior: none;
+  }
+  /* <body> MUST NOT become a scroll container. Any non-visible overflow on
+     body (even overflow-x:hidden — the other axis then computes to auto)
+     turns it into a nested scroller whose content exactly fits, so it
+     SWALLOWS every wheel tick instead of chaining up to <html>. Programmatic
+     scrollTo() still works against the document scroller, which masks the
+     bug — but the mouse wheel does nothing. Keep body overflow visible;
+     horizontal clipping is handled by <html> above. */
+  body {
+    width: 100%;
+    overflow: visible;
     background: var(--bg);
     color: var(--fg);
     font-family: 'Space Grotesk', sans-serif;
