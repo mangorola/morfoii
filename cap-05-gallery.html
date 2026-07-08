@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>05</title>
 
-<!-- Theme before first paint: same key + class contract as index.html. -->
+<!-- Theme before first paint: same key + class contract as index.html.
+     This chapter always boots in Light mode ("Luz") — the gallery + glass
+     lenses are composed on the white field. The toggle and cross-document
+     sync still work as usual after load. -->
 <script>
   try {
-    if (localStorage.getItem('beLight.theme') === 'dark') {
-      document.documentElement.classList.add('dark');
-    }
-  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+    localStorage.setItem('beLight.theme', 'light');
+  } catch (e) { /* storage unavailable (sandboxed) — light for this view only */ }
+  document.documentElement.classList.remove('dark');
 </script>
 
 <style>
