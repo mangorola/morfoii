@@ -1014,6 +1014,24 @@
     setCellW(stampOrder[i], 1);
   }
 
+  // Solid colour frame — force the outer 2-cell border to opaque colour so
+  // the raw photo can't leak through at the edges of the inner stage. Note
+  // the inverted semantics of this chapter: a stamp REVEALS the image, so a
+  // covered border must be UN-stamped. Two things are needed per border cell:
+  //   • guarantee it belongs to a colour plate (.on on layer A) — the plates
+  //     only cover ~68%/56%, so some edge cells would otherwise be transparent;
+  //   • clear any reveal window (drop the stamp, --w → 0) so it stays opaque.
+  // (16-row grid → 2-deep border; a single ring left visible photo through.)
+  for (let i = 0; i < N; i++) {
+    const col = i % COLS;
+    const row = (i / COLS) | 0;
+    if (row <= 1 || row >= ROWS - 2 || col <= 1 || col >= COLS - 2) {
+      aCells[i].classList.add('on');   // guarantee opaque colour here
+      stamped.delete(i);               // undo any reveal window on the border
+      setCellW(i, 0);                  // --w 0 → full colour, image hidden
+    }
+  }
+
   // Hover-radius slider (RADIO) — 1 (precision, single cell) up to the
   // CONFIG maximum, whole steps, defaulting to the max. Updates live.
   const radiusInput = document.getElementById('radius');
