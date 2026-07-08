@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>03 — PATH</title>
 
-<!-- Theme before first paint: same key + class contract as index.html. -->
+<!-- Theme before first paint: same key + class contract as index.html.
+     This chapter always boots dark — the intro loop is composed on the
+     dark field. The toggle and cross-document sync still work as usual. -->
 <script>
   try {
-    if (localStorage.getItem('beLight.theme') === 'dark') {
-      document.documentElement.classList.add('dark');
-    }
-  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+    localStorage.setItem('beLight.theme', 'dark');
+  } catch (e) { /* storage unavailable (sandboxed) — dark for this view only */ }
+  document.documentElement.classList.add('dark');
 </script>
 
 <style>
@@ -513,6 +514,10 @@
     // Theme-dependent cell rendering. Light = the original white light field.
     // Dark = the field starts near the stage; pigment "lights it up".
     darkCellBg: [14, 14, 14],
+
+    // Intro loop — two keyframes auto-played on boot until first interaction.
+    introSeed: 31337,           // mulberry32 seed for column offsets + shifts
+    introFrameMs: 600,          // keyframe duration while the intro plays
   };
 
   const ROWS = CONFIG.gridRows, COLS = CONFIG.gridCols;
@@ -524,10 +529,10 @@
   const S = {
     mode: 'paint',              // paint | erase | select(animate)
     view: 'grid',               // grid | pixel | smooth
-    pigment: 'cyan',
-    brush: 0.8,
+    pigment: 'red',             // Pink — boot default brush
+    brush: 2.5,
     density: 0.9,
-    depositIndex: 3,            // default Very Strong
+    depositIndex: 4,            // default Saturated
     smoothness: 3,
     dragPaint: false,
 
@@ -553,8 +558,8 @@
     selKf: null,
     animating: false,
     progress: 0,
-    kfDur: 1000,
-    loop: false,
+    kfDur: CONFIG.introFrameMs,
+    loop: true,
     animStart: 0,
   };
 
@@ -975,6 +980,7 @@
   // =====================================================================
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    stopIntro();
     const idx = pointerToIndex(e);
     S.hoverCell = idx;
     onCellDown(idx, e);
@@ -1217,12 +1223,139 @@
   }
 
   // =====================================================================
+  // Intro — a looping opening built on the existing keyframe system.
+  // Frame A paints a warm→cold→warm gradient whose columns are staggered
+  // by a seeded vertical offset; frame B is the same image with every
+  // column scrolled by its own distance, so the loop reads as columns
+  // sliding at wildly different speeds. The first interaction (canvas
+  // press, any panel control, opening the panel) freezes whatever frame
+  // is on screen and hands the grid to the user.
+  // =====================================================================
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const introRng = mulberry32(CONFIG.introSeed);
+  const introOffsets = [];
+  for (let c = 0; c < COLS; c++) introOffsets.push(Math.floor(introRng() * ROWS));
+  const introShifts = [];
+  for (let c = 0; c < COLS; c++) introShifts.push(1 + Math.floor(introRng() * (ROWS - 1)));
+
+  // Gradient colour at (col, v), where v is the row after the column's
+  // stagger. Zones, left to right: crimson broken by dark gaps → pink over
+  // crimson → whites opening → steel/sage cool field → orange building
+  // over pink → pink/sage lightening out. In dark mode a pigmentless cell
+  // IS the dark field, so the gaps read as black.
+  function introPigments(col, v) {
+    const p = EMPTY();
+    const tex = 0.7 + 0.3 * Math.sin(v * 0.55 + col * 0.35);
+    const patch = Math.sin(v * 0.55 + col * 0.9) + Math.sin(v * 0.95 - col * 0.3);
+    if (col <= 8) {
+      if (patch > (col < 2 ? -0.2 : 1.15)) {
+        if (tex > 0.9) p.magenta = 0.3;            // a few smoke-grey cells
+        return p;                                   // otherwise pure dark gap
+      }
+      p.yellow = Math.min(1, 0.9 * tex + 0.2);
+    } else if (col <= 16) {
+      const t = (col - 9) / 7;
+      p.red = (0.5 + 0.5 * t) * (0.75 + 0.25 * tex);
+      p.yellow = 0.85 * (1 - t) * tex;
+      if (patch > 1.35) { p.red *= 0.12; p.yellow *= 0.12; }
+    } else if (col <= 22) {
+      const t = (col - 17) / 5;
+      if (patch > 0.3 + (1 - t) * 0.9) {
+        p.magenta = 0.85 + 0.15 * tex;             // the whites
+      } else {
+        p.red = (0.1 + 0.7 * (1 - 0.75 * t)) * tex + 0.05;
+        p.magenta = 0.35 * t;
+      }
+    } else if (col <= 30) {
+      p.cyan = 0.4 + 0.45 * tex + 0.1 * Math.sin(v * 0.6 + col * 0.8);
+      p.magenta = 0.3 + 0.35 * (1 - tex);
+      if (patch > 1.35) { p.cyan = 0.15; p.magenta = 0.9; }  // pale sage islands
+    } else if (col <= 38) {
+      const t = (col - 31) / 7;
+      p.blue = (0.4 + 0.6 * t) * (0.7 + 0.3 * tex);
+      p.red = 0.35 * (1 - 0.6 * t) * tex;
+      if (patch < -1.3) { p.blue *= 0.35; p.red = 0.05; }
+    } else {
+      const t = (col - 39) / 4;
+      p.red = (0.45 - 0.18 * t) * tex + 0.06;
+      p.magenta = 0.45 + 0.35 * (1 - tex);
+    }
+    return p;
+  }
+
+  function buildIntroCells() {
+    const m = new Map();
+    for (let col = 0; col < COLS; col++) {
+      for (let row = 0; row < ROWS; row++) {
+        const p = introPigments(col, (row + introOffsets[col]) % ROWS);
+        if (p.cyan > 0.01 || p.magenta > 0.01 || p.yellow > 0.01 ||
+            p.red > 0.01 || p.blue > 0.01) m.set(row * COLS + col, p);
+      }
+    }
+    return m;
+  }
+
+  let introActive = false;
+
+  function startIntro() {
+    S.cells = buildIntroCells();
+    saveHistory(S.cells);
+    // Frame B scrolls each column up by its shift: displacement d shows
+    // source row (row − d), so d = −shift ⇒ frameA[(row + shift) % ROWS].
+    const dispB = new Map();
+    for (let c = 0; c < COLS; c++) dispB.set(c, -introShifts[c]);
+    S.keyframes = [
+      { id: 'kf-intro-a', disp: new Map() },
+      { id: 'kf-intro-b', disp: dispB },
+    ];
+    introActive = true;
+    playAnimation();
+  }
+
+  function stopIntro() {
+    if (!introActive) return;
+    introActive = false;
+    // Freeze whatever the loop is showing: read the interpolated shifts
+    // while still animating, then bake them so the grid is plainly editable.
+    const frozen = new Map();
+    for (let c = 0; c < COLS; c++) {
+      const d = getColumnDisplacement(c);
+      if (d) frozen.set(c, d);
+    }
+    S.animating = false;
+    S.progress = 0;
+    S.colDisp = frozen;
+    if (frozen.size) {
+      bakeDisplacements();
+      saveHistory(S.cells);
+    }
+    scheduleDraw(); renderPanel();
+  }
+
+  // Any control ends the intro; the canvas press is handled at the top of
+  // the pointerdown listener so the bake lands before the stroke.
+  el('toolsBody').addEventListener('click', stopIntro, true);
+  el('toolsBody').addEventListener('input', stopIntro, true);
+  tab.addEventListener('click', stopIntro);
+  tab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') stopIntro(); });
+  canvas.addEventListener('wheel', stopIntro, { passive: true });
+
+  // =====================================================================
   // Boot.
   // =====================================================================
   window.addEventListener('resize', layout);
   computeGeometry();
   syncTheme();
   layout();
+  startIntro();
   renderPanel();
 })();
 </script>
