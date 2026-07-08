@@ -176,15 +176,13 @@
     font-size: 11px;
     letter-spacing: 0.3em;
     text-transform: uppercase;
-    color: var(--fg-dim);
+    color: #FFFFFF;              /* always white, both themes */
     background: var(--panel-bg);
     border: var(--line-w) solid var(--line);
     cursor: pointer;
     user-select: none;
-    transition: color 0.3s ease;
     white-space: nowrap;
   }
-  #toolsTab:hover { color: var(--fg); }
 
   /* Rows + groups */
   .trow {
@@ -336,10 +334,10 @@
         <!-- Row A: tool · history · view · clear (always present) -->
         <div class="trow">
           <div class="tgroup">
-            <span class="tlabel">Tool</span>
-            <button class="tbtn" data-mode="paint">Paint</button>
-            <button class="tbtn" data-mode="erase">Erase</button>
-            <button class="tbtn" data-mode="select">Animate</button>
+            <span class="tlabel">Herramienta</span>
+            <button class="tbtn" data-mode="paint">Pintar</button>
+            <button class="tbtn" data-mode="erase">Borrar</button>
+            <button class="tbtn" data-mode="select">Animar</button>
           </div>
           <div class="tsep"></div>
           <div class="tgroup">
@@ -348,21 +346,21 @@
           </div>
           <div class="tsep"></div>
           <div class="tgroup">
-            <span class="tlabel">View</span>
-            <button class="tbtn" data-view="grid">Grid</button>
-            <button class="tbtn" data-view="pixel">Pixel</button>
-            <button class="tbtn" data-view="smooth">Smooth</button>
+            <span class="tlabel">Vista</span>
+            <button class="tbtn" data-view="grid">Grilla</button>
+            <button class="tbtn" data-view="pixel">Píxel</button>
+            <button class="tbtn" data-view="smooth">Suave</button>
           </div>
           <div class="tsep"></div>
-          <button class="tbtn" id="clearBtn">Clear</button>
+          <button class="tbtn" id="clearBtn">Limpiar</button>
         </div>
 
         <!-- Row B: paint / erase brush controls -->
         <div class="trow" id="rowBrush">
-          <button class="tbtn" id="dragBtn">Drag · Off</button>
+          <button class="tbtn" id="dragBtn">Arrastre · No</button>
           <div class="tsep"></div>
           <div class="tgroup">
-            <span class="tlabel">Brush</span>
+            <span class="tlabel">Pincel</span>
             <input type="range" class="trange" id="brushRange" min="0.5" max="3" step="0.1">
             <span class="tval" id="brushVal">0.8×</span>
           </div>
@@ -371,18 +369,18 @@
         <!-- Row C: paint pigment / density / deposit -->
         <div class="trow" id="rowPaint">
           <div class="tgroup">
-            <span class="tlabel">Pigment</span>
+            <span class="tlabel">Pigmento</span>
             <div class="swatches" id="swatches"></div>
           </div>
           <div class="tsep"></div>
           <div class="tgroup">
-            <span class="tlabel">Density</span>
+            <span class="tlabel">Densidad</span>
             <input type="range" class="trange" id="densityRange" min="0.1" max="1" step="0.05">
             <span class="tval" id="densityVal">90%</span>
           </div>
           <div class="tsep"></div>
           <div class="tgroup">
-            <span class="tlabel">Deposit</span>
+            <span class="tlabel">Depósito</span>
             <div class="stepped-wrap">
               <div class="stepped-ticks" id="depositTicks"></div>
               <input type="range" class="trange stepped" id="depositRange" min="0" max="4" step="1">
@@ -394,7 +392,7 @@
         <!-- Row D: smooth diffusion -->
         <div class="trow" id="rowSmooth">
           <div class="tgroup">
-            <span class="tlabel">Diffusion</span>
+            <span class="tlabel">Difusión</span>
             <input type="range" class="trange" id="smoothRange" min="1" max="8" step="0.5">
             <span class="tval" id="smoothVal">3.0</span>
           </div>
@@ -403,14 +401,14 @@
         <!-- Row E: animate controls -->
         <div class="trow" id="rowAnim">
           <div class="tgroup">
-            <button class="tbtn" id="selectAllBtn">Select All</button>
-            <button class="tbtn" id="deselectBtn">Deselect</button>
-            <button class="tbtn" id="commitBtn">Commit</button>
+            <button class="tbtn" id="selectAllBtn">Seleccionar todo</button>
+            <button class="tbtn" id="deselectBtn">Deseleccionar</button>
+            <button class="tbtn" id="commitBtn">Confirmar</button>
           </div>
           <div class="tsep"></div>
           <div class="tgroup">
-            <button class="tbtn" id="addKfBtn">+ Keyframe</button>
-            <button class="tbtn" id="updateKfBtn">Update</button>
+            <button class="tbtn" id="addKfBtn">+ Fotograma</button>
+            <button class="tbtn" id="updateKfBtn">Actualizar</button>
           </div>
           <div class="tsep"></div>
           <div class="tgroup">
@@ -420,25 +418,25 @@
           </div>
           <div class="tsep"></div>
           <div class="tgroup">
-            <span class="tlabel">Speed</span>
+            <span class="tlabel">Velocidad</span>
             <input type="range" class="trange" id="speedRange" min="200" max="3000" step="100">
             <span class="tval" id="speedVal">1.0s</span>
           </div>
           <div class="tsep"></div>
-          <button class="tbtn" id="loopBtn">Loop · Off</button>
-          <button class="tbtn" id="clearKfBtn">Clear All</button>
+          <button class="tbtn" id="loopBtn">Bucle · No</button>
+          <button class="tbtn" id="clearKfBtn">Limpiar todo</button>
           <span class="tval" id="animInfo" style="min-width:auto"></span>
         </div>
 
         <!-- Row F: keyframe timeline -->
         <div class="trow" id="rowTimeline">
-          <span class="tlabel">Timeline</span>
+          <span class="tlabel">Línea de tiempo</span>
           <div class="trow" id="timeline"></div>
         </div>
 
       </div>
     </div>
-    <div id="toolsTab" role="button" tabindex="0" aria-expanded="false">▲ Tools</div>
+    <div id="toolsTab" role="button" tabindex="0" aria-expanded="false">▲ Herramientas</div>
     </div>
   </div>
 </div>
@@ -454,7 +452,7 @@
 
   <!-- Chapter label, top-left margin -->
   <text class="label-num"  x="120" y="45" font-size="11">03</text>
-  <text class="label-name" x="162" y="45" font-size="11">DIRECCIÓN</text>
+  <text class="label-name" x="162" y="45" font-size="11">CAMINO</text>
 
   <!-- Theme toggle, top-right margin (left of the back control) -->
   <g class="ctrl" id="themeToggle" role="button" tabindex="0" aria-label="Cambiar tema">
@@ -517,7 +515,7 @@
 
     // Intro loop — two keyframes auto-played on boot until first interaction.
     introSeed: 31337,           // mulberry32 seed for column offsets + shifts
-    introFrameMs: 600,          // keyframe duration while the intro plays
+    introFrameMs: 1400,         // keyframe duration while the intro plays
   };
 
   const ROWS = CONFIG.gridRows, COLS = CONFIG.gridCols;
@@ -1096,7 +1094,7 @@
   const tab = el('toolsTab');
   function toggleTools() {
     const open = tools.classList.toggle('open');
-    tab.textContent = (open ? '▼' : '▲') + ' Tools';
+    tab.textContent = (open ? '▼' : '▲') + ' Herramientas';
     tab.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
   tab.addEventListener('click', toggleTools);
@@ -1105,7 +1103,7 @@
   function updateAnimInfo() {
     el('animInfo').textContent = S.animating
       ? Math.round(S.progress * 100) + '%'
-      : (S.keyframes.length + ' kf');
+      : (S.keyframes.length + ' fot.');
   }
 
   // Reflect all state into the panel (active classes, contextual rows, values).
@@ -1119,9 +1117,9 @@
     el('rowAnim').classList.toggle('hidden', S.mode !== 'select');
     el('rowTimeline').classList.toggle('hidden', !(S.mode === 'select' && S.keyframes.length > 0));
 
-    el('dragBtn').textContent = 'Drag · ' + (S.dragPaint ? 'On' : 'Off');
+    el('dragBtn').textContent = 'Arrastre · ' + (S.dragPaint ? 'Sí' : 'No');
     el('dragBtn').classList.toggle('active', S.dragPaint);
-    el('loopBtn').textContent = 'Loop · ' + (S.loop ? 'On' : 'Off');
+    el('loopBtn').textContent = 'Bucle · ' + (S.loop ? 'Sí' : 'No');
     el('loopBtn').classList.toggle('active', S.loop);
 
     el('undoBtn').disabled = S.hIndex <= 0;
@@ -1340,12 +1338,10 @@
     scheduleDraw(); renderPanel();
   }
 
-  // Any control ends the intro; the canvas press is handled at the top of
-  // the pointerdown listener so the bake lands before the stroke.
-  el('toolsBody').addEventListener('click', stopIntro, true);
-  el('toolsBody').addEventListener('input', stopIntro, true);
-  tab.addEventListener('click', stopIntro);
-  tab.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') stopIntro(); });
+  // Only acting directly on the canvas ends the intro: the pointerdown press
+  // (handled at the top of that listener so the bake lands before the stroke)
+  // and the pigment-cycling wheel. The tools panel stays fully usable — brush,
+  // colour, view, sliders — while the intro keeps looping.
   canvas.addEventListener('wheel', stopIntro, { passive: true });
 
   // =====================================================================
