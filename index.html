@@ -38,6 +38,9 @@
     color: var(--fg);
     font-family: 'Space Grotesk', sans-serif;
     overflow: hidden;
+    /* Nothing here scrolls; stop iOS/Android pull-to-refresh and the
+       overscroll bounce from tugging the fixed artboard around. */
+    overscroll-behavior: none;
     transition: background 0.45s ease, color 0.45s ease;
   }
 
@@ -93,8 +96,12 @@
     transform-origin: center;
     transition: transform 0.25s ease, fill 0.45s ease;
   }
-  .node:hover circle,
   .node:focus-visible circle { transform: scale(1.1); }
+  /* Hover-grow only on devices with a real pointer — on touch, :hover
+     latches after a tap and would leave the node stuck enlarged. */
+  @media (hover: hover) {
+    .node:hover circle { transform: scale(1.1); }
+  }
   .node:focus { outline: none; }
   .node text {
     fill: #ffffff;
@@ -104,6 +111,7 @@
     text-anchor: middle;
     dominant-baseline: central;
     pointer-events: none;
+    -webkit-user-select: none;
     user-select: none;
     transition: fill 0.45s ease;
   }
@@ -142,8 +150,10 @@
     transform-origin: center;
     transition: transform 0.25s ease;
   }
-  .node:hover .conic-fill,
   .node:focus-visible .conic-fill { transform: scale(1.1); }
+  @media (hover: hover) {
+    .node:hover .conic-fill { transform: scale(1.1); }
+  }
 
   /* === Titles — inside the SVG, in artboard coordinates =================== */
   .title {
@@ -152,6 +162,7 @@
     font-weight: 400;
     letter-spacing: 0.34em;
     text-transform: uppercase;
+    -webkit-user-select: none;
     user-select: none;
     pointer-events: none;
     transition: fill 0.45s ease;
@@ -170,11 +181,14 @@
     text-transform: uppercase;
     cursor: pointer;
     pointer-events: all;
+    -webkit-user-select: none;
     user-select: none;
     transition: fill 0.3s ease;
   }
   #themeToggle .toggle-hit { fill: transparent; stroke: none; }
-  #themeToggle:hover { fill: var(--fg); }
+  @media (hover: hover) {
+    #themeToggle:hover { fill: var(--fg); }
+  }
   #themeToggle:focus { outline: none; }
 
   /* === Portrait overlay — the experience is landscape-only on mobile ===== */
