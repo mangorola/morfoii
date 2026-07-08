@@ -1,17 +1,16 @@
-<!-- Chapter 05 — GEVURAH (absorption — the color an object is NOT) -->
+<!-- Chapter 05 — static photo gallery -->
 <!-- Wrapper loaded into index.html via hash routing (#capitulo-05). -->
 <!-- No <script>: safe for innerHTML injection. The experience lives in
-     cap-05-gevurah.html — an iframe document, so its own JS (scroll-driven
-     panorama, canvas rendering) runs normally. The iframe must be allowed
-     to scroll internally: vertical scroll IS the chapter's input. -->
+     cap-05-gallery.html — an iframe document, so its own JS (artboard
+     scaling, theme sync) runs normally. -->
 
 <style>
-  #cap-05-gevurah-wrap {
+  #cap-05-gallery-wrap {
     position: fixed;
     inset: 0;
     overflow: hidden;
   }
-  #cap-05-gevurah-wrap iframe {
+  #cap-05-gallery-wrap iframe {
     position: fixed;
     inset: 0;
     width: 100%;
@@ -23,9 +22,10 @@
   }
 </style>
 
-<section id="cap-05-gevurah-wrap">
+<section id="cap-05-gallery-wrap">
   <iframe
-    src="cap-05-gevurah.html"
-    title="GEVURAH — el color que no es"
+    src="cap-05-gallery.html"
+    title="05 — galería"
+    scrolling="no"
   ></iframe>
 </section>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05</title>
+
+<!-- Theme before first paint: same key + class contract as index.html. -->
+<script>
+  try {
+    if (localStorage.getItem('beLight.theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) { /* storage unavailable (sandboxed) — stay light */ }
+</script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
+
+  /* Theme tokens — same names/values as index.html so both documents flip
+     together. */
+  :root {
+    --bg: #FFFFFF;
+    --fg: #1a1a1a;
+    --fg-dim: rgba(26, 26, 26, 0.45);
+    --fg-faint: rgba(26, 26, 26, 0.22);
+    --line: #5E5E5E;
+    --line-w: 0.9px;
+  }
+  :root.dark {
+    --bg: #000000;
+    --fg: #ffffff;
+    --fg-dim: rgba(245, 245, 240, 0.5);
+    --fg-faint: rgba(245, 245, 240, 0.25);
+    --line: #2E2E2E;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100vh;   /* fallback for older browsers */
+    height: 100dvh;  /* modern: excludes mobile browser chrome */
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Space Grotesk', sans-serif;
+    transition: background 0.45s ease, color 0.45s ease;
+  }
+
+  /* === SVG board — frame lines + margin type ============================= */
+  /* Same coordinate contract as index.html: viewBox 0 0 1920 1080 with
+     "meet" scaling. Only the 4 frame lines here (no circles, no guides,
+     no nodes). The board sits ON TOP of the gallery so the hairlines stay
+     crisp over the photos; pointer events pass through except on .ctrl. */
+  #board {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: block;
+    overflow: visible;   /* frame lines overshoot the artboard to the viewport edges */
+    z-index: 10;
+    pointer-events: none;
+  }
+  #board .frame {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: var(--line-w);
+    vector-effect: non-scaling-stroke;
+    transition: stroke 0.45s ease;
+  }
+  #board text {
+    font-family: 'Space Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .label-num  { fill: var(--fg-dim); transition: fill 0.45s ease; }
+  .ctrl {
+    cursor: pointer;
+    pointer-events: all;
+    fill: var(--fg-dim);
+    transition: fill 0.3s ease;
+  }
+  .ctrl:hover, .ctrl:focus-visible { fill: var(--fg); }
+  .ctrl:focus { outline: none; }
+  .ctrl .hit { fill: transparent; stroke: none; }
+
+  /* === Artboard — HTML twin of the SVG coordinate system ================= */
+  /* A fixed 1920×1080 div, centred and scaled by JS with the same
+     min(vw/1920, vh/1080) math as the SVG's "xMidYMid meet". Everything
+     inside uses raw artboard pixels, so the gallery can never drift from
+     the frame drawn in the SVG. */
+  #artboard {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 1920px;
+    height: 1080px;
+    transform: translate(-50%, -50%) scale(1);
+    z-index: 1;
+  }
+
+  /* Inner stage: the frame rectangle. overflow:hidden crops anything that
+     overshoots exactly at the frame line — same clip every other chapter uses. */
+  #stage {
+    position: absolute;
+    left: 80px;
+    top: 80px;
+    width: 1760px;
+    height: 920px;
+    overflow: hidden;
+    background: var(--bg);
+    transition: background 0.45s ease;
+  }
+
+  /* === Gallery photos ==================================================== */
+  /* One <img> per cell, absolutely positioned in raw stage pixels. Static:
+     no hover, no click, no lightbox. Photos keep full color in both themes;
+     only the gaps and margins show --bg. */
+  .gallery-photo {
+    position: absolute;
+    object-fit: cover;
+    display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- Frame + margin type: homepage coordinate system, frame lines only. -->
+<svg id="board" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
+  <!-- 4 "infinite" frame lines, overshooting the artboard on every side -->
+  <line class="frame" x1="-1000" y1="80"    x2="3000" y2="80"/>
+  <line class="frame" x1="-1000" y1="1000"  x2="3000" y2="1000"/>
+  <line class="frame" x1="80"    y1="-1000" x2="80"   y2="2080"/>
+  <line class="frame" x1="1840"  y1="-1000" x2="1840" y2="2080"/>
+
+  <!-- Chapter label, top-left margin. This chapter carries NO sefirah name —
+       only the number is shown (no adjacent .label-name text element). -->
+  <text class="label-num" x="120" y="45" font-size="11">05</text>
+
+  <!-- Theme toggle, top-right margin (left of the back control). Same
+       typographic treatment + localStorage contract as the homepage. -->
+  <g class="ctrl" id="themeToggle" role="button" tabindex="0" aria-label="Cambiar tema">
+    <rect class="hit" x="1586" y="30" width="76" height="24"/>
+    <text id="themeToggleText" x="1655" y="46" font-size="11" text-anchor="end">○ LUZ</text>
+  </g>
+
+  <!-- Back to index, top-right margin -->
+  <g class="ctrl" id="backIndex" role="link" tabindex="0" aria-label="Volver al índice">
+    <rect class="hit" x="1670" y="30" width="140" height="24"/>
+    <text x="1800" y="46" font-size="11" text-anchor="end">← Índice</text>
+  </g>
+</svg>
+
+<!-- Scaled HTML artboard: the gallery lives inside the frame rectangle. -->
+<div id="artboard">
+  <div id="stage"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // CONFIG — all tunables. Coordinates are raw pixels on the 1920×1080
+  // artboard (same system as index.html); photo positions are computed
+  // in STAGE-relative pixels (stage sits at artboard 80,80).
+  //
+  // Layout contract:
+  //   inner frame 80,80 → 1840,1000 · content inset 40 on every side
+  //   → content area (stage-relative) 40,40 → 1720,880 = 1680×840
+  //   left grid  : 4 cols × 5 rows, 40px gaps, cells 190×136 → 880 wide
+  //   panel gap  : 40px
+  //   right panel: fills the rest → 760×840, one image, object-fit cover
+  //
+  // NOTE: extensions are per-source — A and TODOJUNTO are .jpg, the other
+  // 19 grid photos are .png. A mismatched extension 404s and leaves that
+  // cell blank.
+  // =====================================================================
+  const CONFIG = {
+    artboard: { w: 1920, h: 1080 },
+    stage: { x: 80, y: 80, w: 1760, h: 920 },
+    inset: 40,                     // content margin from the inner frame
+    gap: 40,                       // spacing between all elements
+    grid: {
+      cols: 4,
+      rows: 5,
+      photoW: 190,
+      photoH: 136,                 // (840 − 4×40) / 5
+      // Row-major order: row 1 A–D, row 2 E–H, row 3 I–L, row 4 M–P,
+      // row 5 R S T V.
+      images: [
+        'A.jpg', 'B.png', 'C.png', 'D.png',
+        'E.png', 'F.png', 'G.png', 'H.png',
+        'I.png', 'J.png', 'K.png', 'L.png',
+        'M.png', 'N.png', 'O.png', 'P.png',
+        'R.png', 'S.png', 'T.png', 'V.png',
+      ],
+    },
+    panelImage: 'TODOJUNTO.jpg',   // right panel, fills remaining width
+  };
+
+  // =====================================================================
+  // Artboard scale — mirrors the SVG's preserveAspectRatio="xMidYMid meet"
+  // so the HTML gallery and the SVG frame share one coordinate system.
+  // =====================================================================
+  const root = document.documentElement;
+  const artboard = document.getElementById('artboard');
+  function fit() {
+    const s = Math.min(
+      window.innerWidth / CONFIG.artboard.w,
+      window.innerHeight / CONFIG.artboard.h
+    );
+    if (s <= 0) return;   // viewport not laid out yet — wait for a real size
+    artboard.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit);
+  // The iframe can be attached before it has a size (no resize event fires
+  // for the zero→sized transition) — observe the root element as well.
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(fit).observe(document.documentElement);
+  }
+  fit();
+
+  // =====================================================================
+  // Static layout — every position derives from CONFIG, no randomness.
+  // =====================================================================
+  const stage = document.getElementById('stage');
+  const inset = CONFIG.inset;
+  const gap = CONFIG.gap;
+  const g = CONFIG.grid;
+  const contentH = CONFIG.stage.h - inset * 2;                 // 840
+  const gridW = g.cols * g.photoW + (g.cols - 1) * gap;        // 880
+  const panelX = inset + gridW + gap;                          // 960
+  const panelW = CONFIG.stage.w - inset - panelX;              // 760
+
+  function addPhoto(src, x, y, w, h) {
+    const el = document.createElement('img');
+    el.className = 'gallery-photo';
+    el.src = src;
+    el.alt = '';
+    el.draggable = false;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.width = w + 'px';
+    el.style.height = h + 'px';
+    stage.appendChild(el);
+  }
+
+  // Left panel: 4×5 grid, row-major.
+  for (let i = 0; i < g.images.length; i++) {
+    const col = i % g.cols;
+    const row = Math.floor(i / g.cols);
+    addPhoto(
+      g.images[i],
+      inset + col * (g.photoW + gap),
+      inset + row * (g.photoH + gap),
+      g.photoW,
+      g.photoH
+    );
+  }
+
+  // Right panel: one image, same height as the grid.
+  addPhoto(CONFIG.panelImage, panelX, inset, panelW, contentH);
+
+  // =====================================================================
+  // Back to index — hash change on the parent document, never a reload.
+  // =====================================================================
+  const backIndex = document.getElementById('backIndex');
+  function goHome() {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.location.hash = '#home';
+        return;
+      }
+    } catch (err) { /* cross-origin parent — fall through */ }
+    window.location.href = 'index.html#home';
+  }
+  backIndex.addEventListener('click', goHome);
+  backIndex.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+  });
+
+  // =====================================================================
+  // Theme toggle — discreet typographic control in the top margin. Shares
+  // index.html's contract: '.dark' class on <html> + 'beLight.theme' in
+  // localStorage, so the preference carries across the whole site. The
+  // label mirrors the homepage ('○ LUZ' / '● OSC').
+  // =====================================================================
+  const themeToggle = document.getElementById('themeToggle');
+  const themeToggleText = document.getElementById('themeToggleText');
+  function syncTheme() {
+    themeToggleText.textContent = root.classList.contains('dark') ? '● OSC' : '○ LUZ';
+  }
+  function flipTheme() {
+    root.classList.toggle('dark');
+    try {
+      localStorage.setItem('beLight.theme',
+        root.classList.contains('dark') ? 'dark' : 'light');
+    } catch (e) { /* storage unavailable — theme still flips for this view */ }
+    syncTheme();
+  }
+  themeToggle.addEventListener('click', flipTheme);
+  themeToggle.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipTheme(); }
+  });
+  syncTheme();
+
+  // Theme can change in another tab / the homepage — mirror it live.
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'beLight.theme') {
+      root.classList.toggle('dark', e.newValue === 'dark');
+      syncTheme();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
