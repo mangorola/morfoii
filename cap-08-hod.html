@@ -55,6 +55,7 @@
     height: 100vh;   /* fallback for older browsers */
     height: 100dvh;  /* modern: excludes mobile browser chrome */
     overflow: hidden;
+    overscroll-behavior: none;   /* no pull-to-refresh / rubber-band bleed on touch */
     background: var(--bg);
     color: var(--fg);
     font-family: 'Space Grotesk', sans-serif;
@@ -90,6 +91,7 @@
     font-weight: 400;
     letter-spacing: 0.34em;
     text-transform: uppercase;
+    -webkit-user-select: none;   /* older Safari needs the prefix */
     user-select: none;
   }
   .label-num  { fill: var(--fg-dim); transition: fill 0.45s ease; }
@@ -321,6 +323,15 @@
   @media (prefers-reduced-motion: reduce) {
     #panel { transition: background 0.45s ease, border-color 0.45s ease; }
   }
+
+  /* Touch devices have no real hover — a tap leaves :hover "stuck" until the
+     next tap elsewhere, so neutralise the hover-brighten there. :focus-visible
+     (keyboard) and the .active toggle state are left intact. */
+  @media (hover: none) {
+    .ctrl:hover { fill: var(--fg-dim); }
+    .btn:not(.active):hover { color: var(--fg-dim); border-color: var(--fg-dim); }
+    #placeholder button:hover { color: var(--fg-dim); }
+  }
 </style>
 </head>
 <body>
@@ -507,13 +518,21 @@
     if (s <= 0) return;   // viewport not laid out yet — wait for a real size
     artboard.style.transform = 'translate(-50%, -50%) scale(' + s + ')';
   }
-  window.addEventListener('resize', fit);
+  // Coalesce bursts of resize / observer callbacks (drag-resize, tablet
+  // rotation) into a single fit() per animation frame.
+  let fitScheduled = false;
+  function scheduleFit() {
+    if (fitScheduled) return;
+    fitScheduled = true;
+    requestAnimationFrame(function () { fitScheduled = false; fit(); });
+  }
+  window.addEventListener('resize', scheduleFit);
   // The iframe can be attached before it has a size (no resize event fires
   // for the zero→sized transition) — observe the root element as well.
   if ('ResizeObserver' in window) {
-    new ResizeObserver(fit).observe(document.documentElement);
+    new ResizeObserver(scheduleFit).observe(document.documentElement);
   }
-  fit();
+  fit();   // immediate first layout
 
   // =====================================================================
   // Build the three grids. One <div> per cell; the image layer's checker
