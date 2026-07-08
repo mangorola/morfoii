@@ -230,20 +230,20 @@
           name: 'Lente cuadrada',
           cols: 4, rows: 4, cellW: 75, cellH: 75,   // 4×4 squares → 300×300
           x: 480, y: 400,          // default: overlapped by the other lens
-          refraction: 0.04,        // Refraction 18 — subtle pull toward cell centre
-          dispersion: 3,           // Dispersion 100 — R +3px / B −3px radial split
-          frostSigma: 1.2,         // Frost 10 — barely-there blur
-          splay: 1,                // Splay 3 — ±1px per-cell jitter
+          refraction: 0.12,        // visible per-cell mosaic distortion
+          dispersion: 5,           // rainbow fringing at the cell boundaries
+          frostSigma: 3.5,         // gentle fog — empañado, not invisible
+          splay: 1,                // ±1px per-cell jitter
           shadow: '0 3px 12px rgba(0, 0, 0, 0.2)',  // Depth 61
         },
         {
           name: 'Lente horizontal',
-          cols: 1, rows: 2, cellW: 300, cellH: 75,  // 2 stacked bars → 300×150
+          cols: 2, rows: 1, cellW: 75, cellH: 300,  // 2 vertical bars → 150×300
           x: 540, y: 520,          // overlaps the square lens from below-right
-          refraction: 0.15,        // Refraction 73 — strong
-          dispersion: 3,           // Dispersion 100 — R +3px / B −3px radial split
-          frostSigma: 8,           // Frost 73 — clearly frosted
-          splay: 6,                // Splay 49 — ±6px per-cell jitter
+          refraction: 0.15,        // strong pull toward cell centre
+          dispersion: 3,           // R +3px / B −3px radial split
+          frostSigma: 24,          // heavy milky frost — bathroom-window opaque
+          splay: 6,                // ±6px per-cell jitter
           shadow: '0 6px 24px rgba(0, 0, 0, 0.35)', // Depth 100
         },
       ],
