@@ -627,6 +627,28 @@
     }).join('');
   }
 
+  // Colour-temperature score for an [r,g,b] triple: +1 = warmest, -1 = coldest.
+  // Derived from hue — warm hues are red→yellow (0–90°) and magenta→red
+  // (300–360°); cold hues are green→blue→purple (120–270°). Achromatic greys
+  // score 0 (neutral). Used to order the two extracted clusters so plate A is
+  // always the warmer colour and plate B the cooler — the axis this chapter
+  // ("TEMPERATURA") is built on.
+  function warmth(rgb) {
+    const r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    if (max === min) return 0;               // achromatic — neutral
+    let h;
+    if (max === r) h = ((g - b) / (max - min)) % 6;
+    else if (max === g) h = (b - r) / (max - min) + 2;
+    else h = (r - g) / (max - min) + 4;
+    h = h * 60;
+    if (h < 0) h += 360;
+    if (h <= 90) return 1 - (h / 90);        // 0°=+1.0 → 90°=0.0
+    if (h <= 120) return -(h - 90) / 30;     // 90°=0.0 → 120°=-1.0
+    if (h <= 270) return -1;                 // green→blue→purple: fully cold
+    return (h - 270) / 90;                    // 270°=-1.0 → 360°=+1.0
+  }
+
   // Returns [hexA, hexB] with A the larger cluster, or null if the image
   // yields too few usable pixels (then the current palette is kept).
   function extractColors(img) {
@@ -672,7 +694,9 @@
       else cB = pick();
       nA = n[0]; nB = n[1];
     }
-    if (nB > nA) { const t = cA; cA = cB; cB = t; }   // A = dominant
+    // Order by colour temperature, not cluster size: plate A = warmer,
+    // plate B = cooler. If A is the colder of the two, swap them.
+    if (warmth(cA) < warmth(cB)) { const t = cA; cA = cB; cB = t; }
     return [rgbToHex(cA), rgbToHex(cB)];
   }
 
